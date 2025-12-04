@@ -190,7 +190,7 @@ def main():
 
     mu_val = float(eval(str(args.mu), {"__builtins__": None}, {}))
     params = SCHCParams(k=args.k, n=args.n, L=args.size, mu=mu_val, death_prob=args.death_prob)
-    outdir = Path(__file__).resolve().parent / "figs_4_5_6"
+    outdir = Path(__file__).resolve().parents[1] / "results" / "figs"
     outdir.mkdir(parents=True, exist_ok=True)
 
     fitness_max_runs = []
