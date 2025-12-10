@@ -3,5 +3,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.DS_Store
-results/*.log
-results/*.csv
+results/**/*.log
+results/**/*.csv

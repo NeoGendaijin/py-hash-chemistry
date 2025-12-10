@@ -25,6 +25,8 @@ if str(ROOT) not in sys.path:
 
 from src import SCHCParams, advance_one_step_jit, initialize_state
 
+METRIC_KEYS = ["max_fitness", "mean_fitness", "max_size", "mean_size", "cum_cell_types", "cum_pattern_types"]
+
 
 def _fitness_numpy(component: List[Tuple[int, int, int]]) -> float:
     if not component:
@@ -217,21 +219,20 @@ def _aggregate_and_plot(size_dir: Path, size: int) -> None:
     runs = _load_runs(run_dir)
     if not runs:
         print(f"[aggregate] No run CSVs found in {run_dir}; skipping.")
-        return
+        return None
 
     steps = runs[0]["step"]
     if any(not np.array_equal(r["step"], steps) for r in runs[1:]):
         raise ValueError("Inconsistent step axes across runs; check that steps/runs settings match.")
-    keys = ["max_fitness", "mean_fitness", "max_size", "mean_size", "cum_cell_types", "cum_pattern_types"]
     summary: Dict[str, np.ndarray] = {"step": steps}
 
-    for key in keys:
+    for key in METRIC_KEYS:
         stacked = np.stack([r[key] for r in runs], axis=0)
         summary[f"{key}_mean"] = stacked.mean(axis=0)
         summary[f"{key}_std"] = stacked.std(axis=0)
 
     summary_cols = ["step"]
-    for key in keys:
+    for key in METRIC_KEYS:
         summary_cols.append(f"{key}_mean")
         summary_cols.append(f"{key}_std")
     summary_data = np.column_stack([summary[col] for col in summary_cols])
@@ -254,6 +255,83 @@ def _aggregate_and_plot(size_dir: Path, size: int) -> None:
     _plot_runs(pattern_cum_runs, size_dir / f"fig6_cum_pattern_types_L{size}.png", ylabel="Cumulative pattern types", log_time=True)
 
     print(f"[aggregate] Saved summary and plots for L={size} to {size_dir}")
+    return summary
+
+
+def _load_summary_file(size_dir: Path) -> Dict[str, np.ndarray] | None:
+    path = size_dir / "summary.csv"
+    if not path.exists():
+        return None
+    data = np.genfromtxt(path, delimiter=",", names=True)
+    if data.size == 0:
+        return None
+
+    def _as_array(x):
+        arr = np.array(x, copy=False)
+        return arr if arr.ndim > 0 else np.array([arr])
+
+    summary = {name: _as_array(data[name]) for name in data.dtype.names}
+    return summary
+
+
+def _collect_available_summaries(output_root: Path) -> List[Tuple[int, Dict[str, np.ndarray]]]:
+    summaries: List[Tuple[int, Dict[str, np.ndarray]]] = []
+    for path in sorted(output_root.glob("L*/summary.csv")):
+        size_str = path.parent.name
+        if not size_str.startswith("L"):
+            continue
+        try:
+            size_val = int(size_str[1:])
+        except ValueError:
+            continue
+        summary = _load_summary_file(path.parent)
+        if summary is not None:
+            summaries.append((size_val, summary))
+    return summaries
+
+
+def _plot_multi_size(size_summaries: List[Tuple[int, Dict[str, np.ndarray]]], outdir: Path) -> None:
+    if not size_summaries:
+        return
+    size_summaries = sorted(size_summaries, key=lambda x: x[0])
+    steps = size_summaries[0][1]["step"]
+    for _, summary in size_summaries[1:]:
+        if not np.array_equal(summary["step"], steps):
+            raise ValueError("Inconsistent step axes across sizes; ensure --steps is the same.")
+
+    colors = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#a65628"]
+    colors = colors[: len(size_summaries)]
+
+    def make_plot(value_fn, ylabel: str, filename: str, log_time: bool = True):
+        plt.figure(figsize=(6, 3))
+        for (size, summary), color in zip(size_summaries, colors):
+            plt.plot(steps, value_fn(summary), label=f"L={size}", color=color, linewidth=1.6)
+        if log_time:
+            plt.xscale("log")
+        plt.xlabel("Step")
+        plt.ylabel(ylabel)
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(outdir / filename, dpi=200)
+        plt.close()
+
+    eps = 1e-12
+    make_plot(
+        lambda s: -np.log10(np.clip(np.abs(1.0 - s["max_fitness_mean"]), eps, None)),
+        "-log10|1-fitness| (max)",
+        "fig4_max_fitness_all_sizes.png",
+    )
+    make_plot(
+        lambda s: -np.log10(np.clip(np.abs(1.0 - s["mean_fitness_mean"]), eps, None)),
+        "-log10|1-fitness| (mean)",
+        "fig4_mean_fitness_all_sizes.png",
+    )
+    make_plot(lambda s: s["max_size_mean"], "Max component size", "fig5_max_size_all_sizes.png")
+    make_plot(lambda s: s["mean_size_mean"], "Mean component size", "fig5_mean_size_all_sizes.png")
+    make_plot(lambda s: s["cum_cell_types_mean"], "Cumulative cell types", "fig6_cum_cell_types_all_sizes.png")
+    make_plot(lambda s: s["cum_pattern_types_mean"], "Cumulative pattern types", "fig6_cum_pattern_types_all_sizes.png")
+    print(f"[aggregate] Saved multi-size plots to {outdir}")
 
 
 def main():
@@ -278,7 +356,6 @@ def main():
     args = parser.parse_args()
 
     mu_val = float(eval(str(args.mu), {"__builtins__": None}, {}))
-
     for size in args.sizes:
         params = SCHCParams(k=args.k, n=args.n, L=size, mu=mu_val, death_prob=args.death_prob)
         size_dir = args.output_root / f"L{size}"
@@ -298,6 +375,11 @@ def main():
 
         if not args.skip_aggregate:
             _aggregate_and_plot(size_dir, size)
+
+    if not args.skip_aggregate:
+        size_summaries = _collect_available_summaries(args.output_root)
+        if len(size_summaries) >= 2:
+            _plot_multi_size(size_summaries, args.output_root)
 
 
 if __name__ == "__main__":
