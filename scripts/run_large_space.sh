@@ -9,13 +9,13 @@ cd "$ROOT"
 
 TOTAL_RUNS=100
 GPUS=(0 1 2 3)
-SIZES=(100 200 400 800)
-STEPS=1000000
+SIZES=(100 200 400 800 1600)
+STEPS=20000
 K=1000
 N=10
 MU="0.002/0.999"
 DEATH=0.001
-PROG=200
+PROG=500
 PY=".venv/bin/python"
 
 mkdir -p results/large_space
