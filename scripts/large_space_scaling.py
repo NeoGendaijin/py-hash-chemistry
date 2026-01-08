@@ -299,8 +299,7 @@ def _plot_multi_size(size_summaries: List[Tuple[int, Dict[str, np.ndarray]]], ou
         if not np.array_equal(summary["step"], steps):
             raise ValueError("Inconsistent step axes across sizes; ensure --steps is the same.")
 
-    colors = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#a65628"]
-    colors = colors[: len(size_summaries)]
+    colors = plt.cm.viridis(np.linspace(0.1, 0.9, len(size_summaries)))
 
     def make_plot(value_fn, ylabel: str, filename: str, log_time: bool = True):
         plt.figure(figsize=(6, 3))
