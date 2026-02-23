@@ -85,7 +85,7 @@ def figure1():
     img200 = imread(os.path.join(snap_dir, "L200", "composite_L200.png"))
     img400 = imread(os.path.join(snap_dir, "L400", "composite_L400.png"))
 
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.38))
+    fig, axes = plt.subplots(2, 1, figsize=(DOUBLE_COL, DOUBLE_COL * 1.2))
     for ax in axes:
         ax.set_xticks([])
         ax.set_yticks([])
@@ -95,7 +95,7 @@ def figure1():
     axes[1].imshow(img400)
     add_panel_label(axes[0], "a", x=-0.02, y=1.05)
     add_panel_label(axes[1], "b", x=-0.02, y=1.05)
-    fig.subplots_adjust(wspace=0.05)
+    fig.subplots_adjust(hspace=0.05)
     save(fig, "fig1_snapshots")
 
 
