@@ -419,6 +419,180 @@ def figure6():
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# FIGURE 7: Parameter sensitivity (death_prob)
+# ═══════════════════════════════════════════════════════════════════════
+def figure7():
+    print("Figure 7: Death probability sensitivity")
+    dp_dir = os.path.join(RESULTS, "param_sensitivity_death")
+    dp_vals = [0.0005, 0.001, 0.005, 0.01]
+    L_vals = [200, 300, 320, 400]
+    dp_colors = [PALETTE[0], PALETTE[1], PALETTE[2], PALETTE[3]]
+
+    # Read final-step summary from each condition's summary.csv
+    dp_data = {}
+    for dp in dp_vals:
+        dp_str = f"{dp:.4f}"
+        for L in L_vals:
+            path = os.path.join(dp_dir, f"death_prob_{dp_str}", f"L{L}", "summary.csv")
+            df = pd.read_csv(path)
+            dp_data[(dp, L)] = df.iloc[-1]
+
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.55))
+
+    # ── Panel (a): mean size at final step vs L for each death_prob ──
+    ax = axes[0, 0]
+    for dp, c in zip(dp_vals, dp_colors):
+        xs = L_vals
+        ys = [dp_data[(dp, L)]["mean_size_mean"] for L in L_vals]
+        yerr = [dp_data[(dp, L)]["mean_size_std"] for L in L_vals]
+        ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
+                    capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
+    ax.set_yscale("log")
+    ax.set_xlabel("System size $L$")
+    ax.set_ylabel("Mean size (final step)")
+    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    add_panel_label(ax, "a")
+
+    # ── Panel (b): max size at final step vs L for each death_prob ──
+    ax = axes[0, 1]
+    for dp, c in zip(dp_vals, dp_colors):
+        xs = L_vals
+        ys = [dp_data[(dp, L)]["max_size_mean"] for L in L_vals]
+        yerr = [dp_data[(dp, L)]["max_size_std"] for L in L_vals]
+        ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
+                    capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
+    ax.set_yscale("log")
+    ax.set_xlabel("System size $L$")
+    ax.set_ylabel("Max size (final step)")
+    add_panel_label(ax, "b")
+
+    # ── Panel (c): mean fitness at final step vs L ──
+    ax = axes[1, 0]
+    for dp, c in zip(dp_vals, dp_colors):
+        xs = L_vals
+        ys = [dp_data[(dp, L)]["mean_fitness_mean"] for L in L_vals]
+        yerr = [dp_data[(dp, L)]["mean_fitness_std"] for L in L_vals]
+        ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
+                    capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
+    ax.set_xlabel("System size $L$")
+    ax.set_ylabel("Mean fitness (final step)")
+    ax.legend(loc="lower left", frameon=False, fontsize=6)
+    add_panel_label(ax, "c")
+
+    # ── Panel (d): time series of mean size for L=320 across death_prob values ──
+    ax = axes[1, 1]
+    for dp, c in zip(dp_vals, dp_colors):
+        dp_str = f"{dp:.4f}"
+        path = os.path.join(dp_dir, f"death_prob_{dp_str}", "L320", "summary.csv")
+        df = pd.read_csv(path)
+        mask = df["step"] > 0
+        x = df["step"].values[mask]
+        y = df["mean_size_mean"].values[mask]
+        ys = df["mean_size_std"].values[mask]
+        ax.plot(x, y, color=c, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
+        ax.fill_between(x, np.maximum(y - ys, 0.1), y + ys, color=c, alpha=0.2)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("Step")
+    ax.set_ylabel("Mean size ($L=320$)")
+    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    add_panel_label(ax, "d")
+
+    fig.tight_layout()
+    save(fig, "fig7_death_sensitivity")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# FIGURE 8: Alternative hash function comparison
+# ═══════════════════════════════════════════════════════════════════════
+def figure8():
+    print("Figure 8: Alternative hash (CRC32) comparison")
+    alt_dir = os.path.join(RESULTS, "alt_hash")
+    # Default hash data comes from death_prob=0.001 sensitivity (same params, same seeds)
+    default_dir = os.path.join(RESULTS, "param_sensitivity_death", "death_prob_0.0010")
+    L_vals = [200, 300, 320]  # L=400 has only 3 runs for alt_hash
+
+    # ── Load alt_hash summary data ──
+    alt_data = {}
+    for L in L_vals:
+        path = os.path.join(alt_dir, f"L{L}", "summary.csv")
+        df = pd.read_csv(path)
+        alt_data[L] = df
+
+    # Load alt_hash L=400 individual runs (only 3 seeds)
+    alt_L400_runs = []
+    for seed in range(3):
+        path = os.path.join(alt_dir, "L400", "runs", f"seed_{seed}.csv")
+        alt_L400_runs.append(pd.read_csv(path))
+    # Compute mean across 3 runs
+    alt_L400_mean_size = np.mean([r["mean_size"].iloc[-1] for r in alt_L400_runs])
+    alt_L400_mean_size_std = np.std([r["mean_size"].iloc[-1] for r in alt_L400_runs])
+    alt_L400_fitness = np.mean([r["mean_fitness"].iloc[-1] for r in alt_L400_runs])
+    alt_L400_fitness_std = np.std([r["mean_fitness"].iloc[-1] for r in alt_L400_runs])
+
+    # ── Load default hash summary data ──
+    def_data = {}
+    for L in L_vals + [400]:
+        path = os.path.join(default_dir, f"L{L}", "summary.csv")
+        df = pd.read_csv(path)
+        def_data[L] = df
+
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL, SINGLE_COL * 0.65))
+
+    # ── Panel (a): Mean size at final step vs L (both hash functions) ──
+    ax = axes[0]
+    all_L = [200, 300, 320, 400]
+
+    # Default hash
+    def_sizes = [def_data[L].iloc[-1]["mean_size_mean"] for L in all_L]
+    def_sizes_err = [def_data[L].iloc[-1]["mean_size_std"] for L in all_L]
+    ax.errorbar([x - 4 for x in all_L], def_sizes, yerr=def_sizes_err,
+                fmt="o-", color=PALETTE[0], markersize=5, capsize=3,
+                linewidth=1.2, label="Default (FNV-XOR)")
+
+    # Alt hash
+    alt_sizes = [alt_data[L].iloc[-1]["mean_size_mean"] for L in L_vals] + [alt_L400_mean_size]
+    alt_sizes_err = [alt_data[L].iloc[-1]["mean_size_std"] for L in L_vals] + [alt_L400_mean_size_std]
+    ax.errorbar([x + 4 for x in all_L], alt_sizes, yerr=alt_sizes_err,
+                fmt="s--", color=PALETTE[2], markersize=5, capsize=3,
+                linewidth=1.2, label="CRC32 observation")
+
+    ax.set_yscale("log")
+    ax.set_xlabel("System size $L$")
+    ax.set_ylabel("Mean size (final step)")
+    ax.legend(loc="upper left", frameon=False, fontsize=7)
+    add_panel_label(ax, "a")
+
+    # ── Panel (b): Time series at L=320, comparing fitness from both hashes ──
+    ax = axes[1]
+    def_df = def_data[320]
+    alt_df = alt_data[320]
+    mask = def_df["step"] > 0
+
+    # Default hash fitness
+    x = def_df["step"].values[mask]
+    y_def = def_df["mean_fitness_mean"].values[mask]
+    ys_def = def_df["mean_fitness_std"].values[mask]
+    ax.plot(x, y_def, color=PALETTE[0], linewidth=1.2, label="FNV-XOR fitness")
+    ax.fill_between(x, y_def - ys_def, y_def + ys_def, color=PALETTE[0], alpha=0.2)
+
+    # CRC32 fitness
+    y_alt = alt_df["mean_fitness_mean"].values[mask]
+    ys_alt = alt_df["mean_fitness_std"].values[mask]
+    ax.plot(x, y_alt, color=PALETTE[2], linewidth=1.2, label="CRC32 fitness")
+    ax.fill_between(x, y_alt - ys_alt, y_alt + ys_alt, color=PALETTE[2], alpha=0.2)
+
+    ax.set_xscale("log")
+    ax.set_xlabel("Step")
+    ax.set_ylabel("Mean fitness ($L=320$)")
+    ax.legend(loc="lower left", frameon=False, fontsize=7)
+    add_panel_label(ax, "b")
+
+    fig.tight_layout()
+    save(fig, "fig8_alt_hash")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
@@ -429,4 +603,6 @@ if __name__ == "__main__":
     figure4()
     figure5()
     figure6()
+    figure7()
+    figure8()
     print("\nAll figures generated.")
