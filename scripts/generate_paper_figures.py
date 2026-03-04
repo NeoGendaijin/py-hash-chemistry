@@ -82,20 +82,54 @@ def save(fig, name):
 def figure1():
     print("Figure 1: Grid snapshots")
     snap_dir = os.path.join(RESULTS, "snapshots")
-    img200 = imread(os.path.join(snap_dir, "L200", "composite_L200.png"))
-    img400 = imread(os.path.join(snap_dir, "L400", "composite_L400.png"))
+    steps = [0, 100, 500, 2000, 5000, 10000, 20000]
+    step_labels = ["$t=0$", "$t=100$", "$t=500$", "$t=2{,}000$",
+                   "$t=5{,}000$", "$t=10{,}000$", "$t=20{,}000$"]
+    L_vals = [200, 400]
+    ncols = 4  # 4 columns, wrap 7 images into 2 rows per L
 
-    fig, axes = plt.subplots(2, 1, figsize=(DOUBLE_COL, DOUBLE_COL * 1.2))
-    for ax in axes:
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-    axes[0].imshow(img200)
-    axes[1].imshow(img400)
-    add_panel_label(axes[0], "a", x=-0.02, y=1.05)
-    add_panel_label(axes[1], "b", x=-0.02, y=1.05)
-    fig.subplots_adjust(hspace=0.05)
+    # Load one image to get aspect ratio
+    sample = imread(os.path.join(snap_dir, f"L{L_vals[0]}", "step_00000.png"))
+    img_h, img_w = sample.shape[:2]
+    cell_w = DOUBLE_COL / ncols
+    cell_h = cell_w * (img_h / img_w)
+    # 2 L-values x 2 sub-rows each = 4 rows
+    nrows = len(L_vals) * 2
+    fig_height = nrows * cell_h + 12 * MM
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(DOUBLE_COL, fig_height))
+    fig.subplots_adjust(wspace=0.06, hspace=0.25)
+
+    CROP_TOP = 45  # remove baked-in title text from source PNGs
+
+    for li, L in enumerate(L_vals):
+        base_row = li * 2
+        for idx, (step, label) in enumerate(zip(steps, step_labels)):
+            sub_row = base_row + idx // ncols
+            sub_col = idx % ncols
+            ax = axes[sub_row, sub_col]
+            fname = os.path.join(snap_dir, f"L{L}", f"step_{step:05d}.png")
+            img = imread(fname)[CROP_TOP:, :, :]
+            ax.imshow(img)
+            ax.set_title(label, fontsize=7, pad=2)
+        # Hide unused cells (row has 4 cols but second sub-row has only 3)
+        for col in range(len(steps) % ncols, ncols):
+            if len(steps) % ncols != 0:
+                axes[base_row + 1, col].set_visible(False)
+        # L label on left
+        axes[base_row, 0].set_ylabel(f"$L={L}$", fontsize=8, rotation=0,
+                                     labelpad=25, va="center")
+
+    # Remove ticks and spines from all visible axes
+    for ax in axes.flat:
+        if ax.get_visible():
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+
+    add_panel_label(axes[0, 0], "a", x=-0.30, y=1.18)
+    add_panel_label(axes[2, 0], "b", x=-0.30, y=1.18)
     save(fig, "fig1_snapshots")
 
 
