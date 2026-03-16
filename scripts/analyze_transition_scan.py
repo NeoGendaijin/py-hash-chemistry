@@ -115,8 +115,8 @@ def _write_report(
     lines.append("## Key Findings")
     lines.append("- Mean component size stays ~2-3 for L<=300, then jumps to ~1,800+ at L=320.")
     lines.append("- The first crossing of mean_size >= 10/100/1000 appears only for L>=320.")
-    lines.append("- Mean size vs fitness shows strong negative correlation for L>=320.")
-    lines.append("- Mean fitness tends to decrease from early to late windows for L>=320.")
+    lines.append("- Mean size vs mean hash score shows strong negative temporal correlation for L>=320.")
+    lines.append("- Mean hash score tends to decrease from early to late windows for L>=320.")
     lines.append("")
     lines.append("## Per-Size Summary (final step and transition markers)")
     lines.append("")
@@ -128,7 +128,7 @@ def _write_report(
         "t(mean_size>=10)",
         "t(mean_size>=100)",
         "t(mean_size>=1000)",
-        "corr(size,fitness)",
+        "corr(mean size, mean score)",
     ]
     lines.append("| " + " | ".join(header) + " |")
     lines.append("| " + " | ".join(["---"] * len(header)) + " |")
@@ -145,7 +145,7 @@ def _write_report(
     lines.append("## Notes")
     lines.append(
         "The sharp jump between L=300 and L=320 is consistent with a transition from"
-        " local fitness optimization to size-dominant competition, as suggested in the"
+        " local score optimization to size-dominant competition, as suggested in the"
         " earlier discussion with Prof. Sayama."
     )
     lines.append("")
@@ -281,13 +281,13 @@ def main() -> None:
     _plot_line(L_vals, ratio, ratio_path, "Late/Early mean size ratio", log_y=True)
     figures["Late/Early mean size ratio vs L"] = ratio_path
 
-    corr_path = outdir / "corr_size_fitness_vs_L.png"
-    _plot_line(L_vals, corr, corr_path, "Corr(mean size, mean fitness) 2k-10k")
-    figures["Size/Fitness correlation vs L"] = corr_path
+    corr_path = outdir / "corr_mean_size_mean_score_vs_L.png"
+    _plot_line(L_vals, corr, corr_path, "Corr(mean size, mean score) 2k-10k")
+    figures["Size/score correlation vs L"] = corr_path
 
-    fit_ratio_path = outdir / "mean_fitness_late_over_early_vs_L.png"
-    _plot_line(L_vals, fit_ratio, fit_ratio_path, "Late/Early mean fitness ratio")
-    figures["Late/Early mean fitness ratio vs L"] = fit_ratio_path
+    fit_ratio_path = outdir / "mean_score_late_over_early_vs_L.png"
+    _plot_line(L_vals, fit_ratio, fit_ratio_path, "Late/Early mean hash score ratio")
+    figures["Late/Early mean score ratio vs L"] = fit_ratio_path
 
     threshold_series = {
         thr: np.array([r[f"t_mean_size_{int(thr)}"] for r in rows], dtype=np.float64) for thr in thresholds

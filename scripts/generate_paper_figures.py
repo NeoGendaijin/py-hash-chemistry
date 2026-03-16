@@ -76,6 +76,27 @@ def save(fig, name):
     print(f"  Saved {name}.pdf / .png")
 
 
+def wilson_interval(k, n, z=1.96):
+    """Wilson score interval for a binomial proportion."""
+    if n <= 0:
+        return np.nan, np.nan
+    phat = k / n
+    denom = 1 + z ** 2 / n
+    center = (phat + z ** 2 / (2 * n)) / denom
+    margin = z * np.sqrt((phat * (1 - phat) + z ** 2 / (4 * n)) / n) / denom
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+
+def late_novelty_rate(df, start=15000, end=20000):
+    """Estimate late-window novelty production from cumulative pattern counts."""
+    mask = (df["step"].values >= start) & (df["step"].values <= end)
+    if mask.sum() < 2:
+        return np.nan
+    x = df["step"].values[mask].astype(float)
+    y = df["cum_pattern_types_mean"].values[mask].astype(float)
+    return float(np.polyfit(x, y, 1)[0])
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # FIGURE 1: Grid snapshots (L=200 and L=400 composites)
 # ═══════════════════════════════════════════════════════════════════════
@@ -135,8 +156,8 @@ def figure2():
 
     fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.6))
     metrics = [
-        ("mean_fitness_mean", "mean_fitness_std", "Mean fitness"),
-        ("max_fitness_mean", "max_fitness_std", "Max fitness"),
+        ("mean_fitness_mean", "mean_fitness_std", "Mean hash score"),
+        ("max_fitness_mean", "max_fitness_std", "Max hash score"),
         ("mean_size_mean", "mean_size_std", "Mean component size"),
         ("cum_pattern_types_mean", "cum_pattern_types_std", "Cumulative pattern types"),
     ]
@@ -167,61 +188,135 @@ def figure2():
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# FIGURE 3: Phase transition — size and fitness vs L
+# FIGURE 3: Stochastic crossover — size, score, runaway probability, novelty vs L
 # ═══════════════════════════════════════════════════════════════════════
 def figure3():
-    print("Figure 3: Phase transition scan")
-    # Load coarse scan
+    print("Figure 3: Stochastic crossover scan")
     coarse = pd.read_csv(os.path.join(RESULTS, "transition_scan", "analysis", "transition_analysis.csv"))
-    # Load fine scan
     fine = pd.read_csv(os.path.join(RESULTS, "fine_transition_scan", "analysis", "fine_transition_analysis.csv"))
-    # Load per-size summary for error bars
     pss = pd.read_csv(os.path.join(RESULTS, "statistical_analysis", "per_size_summary.csv"))
 
-    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, SINGLE_COL * 0.65))
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.62))
+    rng = np.random.default_rng(42)
 
-    # ── Panel (a): mean size at final step vs L (log y) ──
-    ax = axes[0]
-    # Coarse scan with error bars from pss
-    ax.errorbar(pss["L"], pss["mean_size_final_mean"], yerr=pss["mean_size_final_std"],
-                fmt="o-", color=PALETTE[0], markersize=4, linewidth=1.0,
-                capsize=2, label="Coarse ($\\Delta L=20$)")
-    # Fine scan
-    ax.errorbar(fine["L"], fine["mean_size_end"], yerr=fine["mean_size_end_std"],
-                fmt="s--", color=PALETTE[1], markersize=3.5, linewidth=0.8,
-                capsize=2, label="Fine ($\\Delta L=2$)")
+    # ── Panel (a): final-size distributions with medians and IQR ──
+    ax = axes[0, 0]
+    coarse_L = pss["L"].values.astype(int)
+    fine_L = fine["L"].values.astype(int)
+    coarse_median, coarse_q1, coarse_q3 = [], [], []
+    coarse_runaway_fraction, coarse_runaway_count, coarse_n_runs = [], [], []
+    for L in coarse_L:
+        runs_dir = os.path.join(RESULTS, "transition_scan", f"L{L}", "runs")
+        vals = []
+        for name in sorted(os.listdir(runs_dir)):
+            if not name.endswith(".csv"):
+                continue
+            df = pd.read_csv(os.path.join(runs_dir, name))
+            vals.append(float(df["mean_size"].iloc[-1]))
+        vals = np.array(vals, dtype=float)
+        jitter = rng.uniform(-3.0, 3.0, len(vals))
+        ax.scatter(np.full(len(vals), L) + jitter, vals, s=10, color=PALETTE[0], alpha=0.25, linewidths=0)
+        coarse_median.append(np.median(vals))
+        coarse_q1.append(np.quantile(vals, 0.25))
+        coarse_q3.append(np.quantile(vals, 0.75))
+        coarse_runaway_count.append(int(np.sum(vals > 100.0)))
+        coarse_n_runs.append(len(vals))
+        coarse_runaway_fraction.append(float(np.mean(vals > 100.0)))
+
+    fine_median, fine_q1, fine_q3 = [], [], []
+    fine_runaway_fraction, fine_runaway_count, fine_n_runs = [], [], []
+    for L in fine_L:
+        runs_dir = os.path.join(RESULTS, "fine_transition_scan", f"L{L}", "runs")
+        vals = []
+        for name in sorted(os.listdir(runs_dir)):
+            if not name.endswith(".csv"):
+                continue
+            df = pd.read_csv(os.path.join(runs_dir, name))
+            vals.append(float(df["mean_size"].iloc[-1]))
+        vals = np.array(vals, dtype=float)
+        jitter = rng.uniform(-0.7, 0.7, len(vals))
+        ax.scatter(np.full(len(vals), L) + jitter, vals, s=10, marker="s",
+                   color=PALETTE[1], alpha=0.25, linewidths=0)
+        fine_median.append(np.median(vals))
+        fine_q1.append(np.quantile(vals, 0.25))
+        fine_q3.append(np.quantile(vals, 0.75))
+        fine_runaway_count.append(int(np.sum(vals > 100.0)))
+        fine_n_runs.append(len(vals))
+        fine_runaway_fraction.append(float(np.mean(vals > 100.0)))
+
+    coarse_yerr = np.vstack([
+        np.array(coarse_median) - np.array(coarse_q1),
+        np.array(coarse_q3) - np.array(coarse_median),
+    ])
+    fine_yerr = np.vstack([
+        np.array(fine_median) - np.array(fine_q1),
+        np.array(fine_q3) - np.array(fine_median),
+    ])
+    ax.errorbar(coarse_L, coarse_median, yerr=coarse_yerr, fmt="o-", color=PALETTE[0],
+                markersize=4, linewidth=1.0, capsize=2, label="Coarse median/IQR")
+    ax.errorbar(fine_L, fine_median, yerr=fine_yerr, fmt="s--", color=PALETTE[1],
+                markersize=3.5, linewidth=0.8, capsize=2, label="Fine median/IQR")
     ax.set_yscale("log")
     ax.set_ylabel("Mean size (final step)")
     ax.set_xlabel("System size $L$")
-    ax.axvspan(300, 320, alpha=0.1, color="grey", label="Transition region")
+    ax.axvspan(300, 320, alpha=0.1, color="grey", label="Crossover region")
     ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "a")
 
-    # ── Panel (b): correlation(size, fitness) vs L ──
-    ax = axes[1]
+    # ── Panel (b): temporal correlation(mean size, mean score) vs L ──
+    ax = axes[0, 1]
     ax.plot(coarse["L"], coarse["corr_size_fitness_2k_10k"], "o-", color=PALETTE[0],
             markersize=4, label="Coarse")
     ax.plot(fine["L"], fine["corr_size_fitness_2k_10k"], "s--", color=PALETTE[1],
             markersize=3.5, label="Fine")
     ax.axhline(0, color="grey", linewidth=0.5, linestyle=":")
     ax.axvspan(300, 320, alpha=0.1, color="grey")
-    ax.set_ylabel("Corr(size, fitness)")
+    ax.set_ylabel("Corr(mean size, mean score)")
     ax.set_xlabel("System size $L$")
     ax.legend(loc="lower left", frameon=False, fontsize=6)
     add_panel_label(ax, "b")
 
-    # ── Panel (c): runaway fraction vs L ──
-    ax = axes[2]
-    ax.plot(pss["L"], pss["runaway_fraction"], "o-", color=PALETTE[0],
-            markersize=4, label="Coarse")
-    ax.plot(fine["L"], fine["runaway_fraction"], "s--", color=PALETTE[1],
-            markersize=3.5, label="Fine")
+    # ── Panel (c): runaway probability vs L ──
+    ax = axes[1, 0]
+    coarse_low, coarse_high = [], []
+    for frac, count, n_runs in zip(coarse_runaway_fraction, coarse_runaway_count, coarse_n_runs):
+        lo, hi = wilson_interval(count, n_runs)
+        coarse_low.append(frac - lo)
+        coarse_high.append(hi - frac)
+    fine_low, fine_high = [], []
+    for frac, count, n_runs in zip(fine_runaway_fraction, fine_runaway_count, fine_n_runs):
+        lo, hi = wilson_interval(count, n_runs)
+        fine_low.append(frac - lo)
+        fine_high.append(hi - frac)
+    ax.errorbar(coarse_L, coarse_runaway_fraction, yerr=[coarse_low, coarse_high],
+                fmt="o-", color=PALETTE[0], markersize=4, linewidth=1.0, capsize=2, label="Coarse")
+    ax.errorbar(fine_L, fine_runaway_fraction, yerr=[fine_low, fine_high],
+                fmt="s--", color=PALETTE[1], markersize=3.5, linewidth=0.8, capsize=2, label="Fine")
     ax.axvspan(300, 320, alpha=0.1, color="grey")
-    ax.set_ylabel("Runaway fraction")
+    ax.set_ylabel("Runaway probability")
     ax.set_xlabel("System size $L$")
     ax.set_ylim(-0.05, 1.05)
     ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "c")
+
+    # ── Panel (d): late-window novelty rate vs L ──
+    ax = axes[1, 1]
+    coarse_novelty = []
+    for L in coarse_L:
+        df = pd.read_csv(os.path.join(RESULTS, "transition_scan", f"L{L}", "summary.csv"))
+        coarse_novelty.append(late_novelty_rate(df))
+    fine_novelty = []
+    for L in fine_L:
+        df = pd.read_csv(os.path.join(RESULTS, "fine_transition_scan", f"L{L}", "summary.csv"))
+        fine_novelty.append(late_novelty_rate(df))
+    ax.plot(coarse_L, coarse_novelty, "o-", color=PALETTE[0], markersize=4, label="Coarse")
+    ax.plot(fine_L, fine_novelty, "s--", color=PALETTE[1], markersize=3.5, label="Fine")
+    ax.axvspan(300, 320, alpha=0.1, color="grey")
+    ax.set_yscale("log")
+    ax.set_ylabel("Late novelty rate")
+    ax.set_xlabel("System size $L$")
+    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    add_panel_label(ax, "d")
 
     fig.tight_layout()
     save(fig, "fig3_transition")
@@ -253,7 +348,7 @@ def figure4():
         axes[0].fill_between(x, np.maximum(y - ys, 0.1), y + ys,
                              color=colors[i], alpha=0.15)
 
-        # Mean fitness
+        # Mean hash score
         y2 = df["mean_fitness_mean"].values[mask]
         ys2 = df["mean_fitness_std"].values[mask]
         axes[1].plot(x, y2, color=colors[i], linewidth=0.9, label=f"{L}")
@@ -268,7 +363,7 @@ def figure4():
 
     axes[1].set_xscale("log")
     axes[1].set_xlabel("Step")
-    axes[1].set_ylabel("Mean fitness")
+    axes[1].set_ylabel("Mean hash score")
     add_panel_label(axes[1], "b")
 
     # Colorbar-like legend
@@ -401,7 +496,7 @@ def figure6():
     ax.set_ylabel("Max size (final step)")
     add_panel_label(ax, "b")
 
-    # ── Panel (c): mean fitness at final step vs L ──
+    # ── Panel (c): mean hash score at final step vs L ──
     ax = axes[1, 0]
     for mu, c in zip(mu_vals, mu_colors):
         xs = L_vals
@@ -410,7 +505,7 @@ def figure6():
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$\\mu={mu}$")
     ax.set_xlabel("System size $L$")
-    ax.set_ylabel("Mean fitness (final step)")
+    ax.set_ylabel("Mean hash score (final step)")
     ax.legend(loc="lower left", frameon=False, fontsize=6)
     add_panel_label(ax, "c")
 
@@ -485,7 +580,7 @@ def figure7():
     ax.set_ylabel("Max size (final step)")
     add_panel_label(ax, "b")
 
-    # ── Panel (c): mean fitness at final step vs L ──
+    # ── Panel (c): mean hash score at final step vs L ──
     ax = axes[1, 0]
     for dp, c in zip(dp_vals, dp_colors):
         xs = L_vals
@@ -494,7 +589,7 @@ def figure7():
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
     ax.set_xlabel("System size $L$")
-    ax.set_ylabel("Mean fitness (final step)")
+    ax.set_ylabel("Mean hash score (final step)")
     ax.legend(loc="lower left", frameon=False, fontsize=6)
     add_panel_label(ax, "c")
 
@@ -525,9 +620,9 @@ def figure7():
 # FIGURE 8: Alternative hash function comparison
 # ═══════════════════════════════════════════════════════════════════════
 def figure8():
-    print("Figure 8: Alternative hash (CRC32) comparison")
+    print("Figure 8: Alternative score probe (CRC32)")
     alt_dir = os.path.join(RESULTS, "alt_hash")
-    # Default hash data comes from death_prob=0.001 sensitivity (same params, same seeds)
+    # Default score data comes from death_prob=0.001 sensitivity (same params, same seeds)
     default_dir = os.path.join(RESULTS, "param_sensitivity_death", "death_prob_0.0010")
     L_vals = [200, 300, 320]  # L=400 has only 3 runs for alt_hash
 
@@ -562,12 +657,12 @@ def figure8():
     ax = axes[0]
     all_L = [200, 300, 320, 400]
 
-    # Default hash
+    # Default surrogate score
     def_sizes = [def_data[L].iloc[-1]["mean_size_mean"] for L in all_L]
     def_sizes_err = [def_data[L].iloc[-1]["mean_size_std"] for L in all_L]
     ax.errorbar([x - 4 for x in all_L], def_sizes, yerr=def_sizes_err,
                 fmt="o-", color=PALETTE[0], markersize=5, capsize=3,
-                linewidth=1.2, label="Default (FNV-XOR)")
+                linewidth=1.2, label="Default surrogate score")
 
     # Alt hash
     alt_sizes = [alt_data[L].iloc[-1]["mean_size_mean"] for L in L_vals] + [alt_L400_mean_size]
@@ -582,28 +677,28 @@ def figure8():
     ax.legend(loc="upper left", frameon=False, fontsize=7)
     add_panel_label(ax, "a")
 
-    # ── Panel (b): Time series at L=320, comparing fitness from both hashes ──
+    # ── Panel (b): Time series at L=320, comparing score measurements ──
     ax = axes[1]
     def_df = def_data[320]
     alt_df = alt_data[320]
     mask = def_df["step"] > 0
 
-    # Default hash fitness
+    # Default surrogate score
     x = def_df["step"].values[mask]
     y_def = def_df["mean_fitness_mean"].values[mask]
     ys_def = def_df["mean_fitness_std"].values[mask]
-    ax.plot(x, y_def, color=PALETTE[0], linewidth=1.2, label="FNV-XOR fitness")
+    ax.plot(x, y_def, color=PALETTE[0], linewidth=1.2, label="Default surrogate score")
     ax.fill_between(x, y_def - ys_def, y_def + ys_def, color=PALETTE[0], alpha=0.2)
 
-    # CRC32 fitness
+    # CRC32 score
     y_alt = alt_df["mean_fitness_mean"].values[mask]
     ys_alt = alt_df["mean_fitness_std"].values[mask]
-    ax.plot(x, y_alt, color=PALETTE[2], linewidth=1.2, label="CRC32 fitness")
+    ax.plot(x, y_alt, color=PALETTE[2], linewidth=1.2, label="CRC32 score")
     ax.fill_between(x, y_alt - ys_alt, y_alt + ys_alt, color=PALETTE[2], alpha=0.2)
 
     ax.set_xscale("log")
     ax.set_xlabel("Step")
-    ax.set_ylabel("Mean fitness ($L=320$)")
+    ax.set_ylabel("Mean hash score ($L=320$)")
     ax.legend(loc="lower left", frameon=False, fontsize=7)
     add_panel_label(ax, "b")
 

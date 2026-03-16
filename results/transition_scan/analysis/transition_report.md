@@ -12,12 +12,12 @@ This report analyzes the mid-range spatial sizes to locate the qualitative trans
 ## Key Findings
 - Mean component size stays ~2-3 for L<=300, then jumps to ~1,800+ at L=320.
 - The first crossing of mean_size >= 10/100/1000 appears only for L>=320.
-- Mean size vs fitness shows strong negative correlation for L>=320.
-- Mean fitness tends to decrease from early to late windows for L>=320.
+- Mean size vs mean hash score shows strong negative temporal correlation for L>=320.
+- Mean hash score tends to decrease from early to late windows for L>=320.
 
 ## Per-Size Summary (final step and transition markers)
 
-| L | mean_size_end | max_size_end | late/early (mean_size) | t(mean_size>=10) | t(mean_size>=100) | t(mean_size>=1000) | corr(size,fitness) |
+| L | mean_size_end | max_size_end | late/early (mean_size) | t(mean_size>=10) | t(mean_size>=100) | t(mean_size>=1000) | corr(mean size, mean score) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 200 | 2.936 | 6.8 | 0.99 | nan | nan | nan | 0.20 |
 | 220 | 2.868 | 9.6 | 0.96 | nan | nan | nan | 0.07 |
@@ -35,9 +35,9 @@ This report analyzes the mid-range spatial sizes to locate the qualitative trans
 - Mean size (final) vs L: `results/transition_scan/analysis/mean_size_end_vs_L.png`
 - Max size (final) vs L: `results/transition_scan/analysis/max_size_end_vs_L.png`
 - Late/Early mean size ratio vs L: `results/transition_scan/analysis/mean_size_late_over_early_vs_L.png`
-- Size/Fitness correlation vs L: `results/transition_scan/analysis/corr_size_fitness_vs_L.png`
-- Late/Early mean fitness ratio vs L: `results/transition_scan/analysis/mean_fitness_late_over_early_vs_L.png`
+- Size/score correlation vs L: `results/transition_scan/analysis/corr_mean_size_mean_score_vs_L.png`
+- Late/Early mean score ratio vs L: `results/transition_scan/analysis/mean_score_late_over_early_vs_L.png`
 - Time to mean size thresholds: `results/transition_scan/analysis/time_to_mean_size_thresholds.png`
 
 ## Notes
-The sharp jump between L=300 and L=320 is consistent with a transition from local fitness optimization to size-dominant competition, as suggested in the earlier discussion with Prof. Sayama.
+The sharp jump between L=300 and L=320 is consistent with a transition from local score optimization to size-dominant competition, as suggested in the earlier discussion with Prof. Sayama.

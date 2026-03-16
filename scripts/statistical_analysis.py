@@ -6,7 +6,7 @@ Computes:
 - Mean +/- std across replicates for each L and metric
 - Mann-Whitney U test and t-test comparing L=300 vs L=320
 - Effect sizes (Cohen's d)
-- Fraction of runs entering "runaway regime" (mean_size > 100)
+- Fraction of runs entering the "runaway regime" at the final sampled step (mean_size > 100)
 - Distribution of waiting times to threshold crossing
 - Generates plots with error bars and confidence bands
 """
@@ -120,10 +120,10 @@ def run_analysis(input_root: Path, output_dir: Path,
             row[f"{metric}_late_mean"] = late_arr.mean()
             row[f"{metric}_late_std"] = late_arr.std()
 
-        # Runaway fraction
+        # Runaway fraction based on the final sampled mean size.
         runaway_count = 0
         for r in runs:
-            if np.any(r["mean_size"] > runaway_threshold):
+            if r["mean_size"][-1] > runaway_threshold:
                 runaway_count += 1
         row["runaway_fraction"] = runaway_count / len(runs)
         row["runaway_count"] = runaway_count
@@ -255,17 +255,17 @@ def run_analysis(input_root: Path, output_dir: Path,
     plt.savefig(output_dir / "size_vs_L_errorbars.png", dpi=200)
     plt.close()
 
-    # 2. Mean fitness with error bars
+    # 2. Mean hash score with error bars
     fig, ax = plt.subplots(figsize=(8, 5))
     means = np.array([next(r for r in summary_rows if r["L"] == s)["mean_fitness_final_mean"] for s in sizes])
     stds = np.array([next(r for r in summary_rows if r["L"] == s)["mean_fitness_final_std"] for s in sizes])
     ax.errorbar(L_arr, means, yerr=stds, marker="o", color="green", capsize=4)
     ax.set_xlabel("L (grid size)")
-    ax.set_ylabel("Mean fitness at final step")
+    ax.set_ylabel("Mean hash score at final step")
     ax.grid(True, alpha=0.3)
-    ax.set_title("Mean Fitness vs Grid Size (mean ± std)")
+    ax.set_title("Mean Hash Score vs Grid Size (mean ± std)")
     plt.tight_layout()
-    plt.savefig(output_dir / "fitness_vs_L_errorbars.png", dpi=200)
+    plt.savefig(output_dir / "mean_score_vs_L_errorbars.png", dpi=200)
     plt.close()
 
     # 3. Runaway fraction
@@ -273,7 +273,7 @@ def run_analysis(input_root: Path, output_dir: Path,
     fracs = np.array([next(r for r in summary_rows if r["L"] == s)["runaway_fraction"] for s in sizes])
     ax.bar(L_arr, fracs, width=8, color="coral", edgecolor="black")
     ax.set_xlabel("L (grid size)")
-    ax.set_ylabel(f"Fraction of runs with mean_size > {runaway_threshold}")
+    ax.set_ylabel(f"Fraction of runs with final mean_size > {runaway_threshold}")
     ax.set_ylim(0, 1.05)
     ax.grid(True, alpha=0.3, axis="y")
     ax.set_title("Runaway Regime Probability vs Grid Size")
@@ -317,10 +317,10 @@ def run_analysis(input_root: Path, output_dir: Path,
             axes[1].fill_between(steps, mean_ts - std_ts, mean_ts + std_ts, alpha=0.15)
 
         axes[1].set_xlabel("Step")
-        axes[1].set_ylabel("Mean fitness")
+        axes[1].set_ylabel("Mean hash score")
         axes[1].legend()
         axes[1].grid(True, alpha=0.3)
-        axes[1].set_title("Mean Fitness Time Series (± 1 std)")
+        axes[1].set_title("Mean Hash Score Time Series (± 1 std)")
 
         plt.tight_layout()
         plt.savefig(output_dir / "timeseries_confidence_bands.png", dpi=200)

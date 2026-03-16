@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Alternative hash function test for SCHC.
+Alternative score probe for SCHC.
 
-Tests robustness of the transition by using CRC32 instead of the default XOR hash.
-Implements a modified simulation that uses zlib.crc32 for fitness computation.
+Measures the same trajectories with CRC32 instead of the default surrogate score.
+The simulation dynamics are unchanged; CRC32 is observation-only.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from scripts.large_space_scaling import _save_run_csv, _load_runs, METRIC_KEYS
 
 
 def _fitness_crc32(component: List[Tuple[int, int, int]]) -> float:
-    """CRC32-based fitness function as alternative hash."""
+    """CRC32-based score used as an observation-only alternative."""
     if not component:
         return 0.0
     arr = np.array(component, dtype=np.uint32)
@@ -60,7 +60,7 @@ def _component_signature(component: List[Tuple[int, int, int]]) -> Tuple[Tuple[i
 
 
 def _components_and_metrics_crc32(config_np: np.ndarray) -> Dict:
-    """Connected components with CRC32 fitness."""
+    """Connected components with CRC32 score."""
     L = config_np.shape[0]
     visited = np.zeros_like(config_np, dtype=bool)
     sizes = []
@@ -110,7 +110,7 @@ def _components_and_metrics_crc32(config_np: np.ndarray) -> Dict:
 
 def run_single_alt_hash(params: SCHCParams, steps: int, seed: int,
                          progress_interval: int = 500):
-    """Run simulation but compute metrics with CRC32 fitness (observation-only)."""
+    """Run simulation but compute metrics with CRC32 score (observation-only)."""
     key = random.PRNGKey(seed)
     state = initialize_state(key, params)
 
@@ -136,8 +136,8 @@ def run_single_alt_hash(params: SCHCParams, steps: int, seed: int,
 
         if t == steps:
             break
-        # The actual simulation dynamics still use the JAX hash internally
-        # We're measuring with an alternative hash to check if transition is observable
+        # The actual simulation dynamics still use the default surrogate score internally.
+        # We only change the observed score to test whether the size-score decoupling persists.
         state = advance_one_step_jit(state, params)
 
     return metrics
@@ -201,8 +201,8 @@ def run_and_aggregate(sizes, runs, steps, k, n, mu, death_prob,
         axes[0].grid(True, alpha=0.3)
 
         axes[1].set_xlabel("Step")
-        axes[1].set_ylabel("Mean fitness")
-        axes[1].set_title("Alt Hash (CRC32): Mean Fitness")
+        axes[1].set_ylabel("Mean hash score")
+        axes[1].set_title("Alternative score probe (CRC32): Mean hash score")
         axes[1].set_xscale("log")
         axes[1].legend()
         axes[1].grid(True, alpha=0.3)
@@ -213,7 +213,7 @@ def run_and_aggregate(sizes, runs, steps, k, n, mu, death_prob,
 
         # Summary table
         with open(output_root / "alt_hash_summary.csv", "w") as f:
-            f.write("L,mean_size_final,max_size_final,mean_fitness_final\n")
+            f.write("L,mean_size_final,max_size_final,mean_score_final\n")
             for size in sorted(summaries.keys()):
                 s = summaries[size]
                 f.write(f"{size},{s['mean_size_mean'][-1]:.4f},"
@@ -224,7 +224,7 @@ def run_and_aggregate(sizes, runs, steps, k, n, mu, death_prob,
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Alt hash function test for SCHC.")
+    parser = argparse.ArgumentParser(description="Alternative score probe (CRC32) for SCHC.")
     parser.add_argument("--sizes", type=int, nargs="+", default=[200, 300, 320, 400])
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--steps", type=int, default=10000)
