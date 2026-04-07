@@ -61,6 +61,20 @@ plt.rcParams.update({
 
 PALETTE = sns.color_palette("colorblind", 10)
 
+# Font size defaults (for double-column figures)
+_BASE_FONT = {
+    "font.size": 8, "axes.labelsize": 8, "axes.titlesize": 8,
+    "xtick.labelsize": 7, "ytick.labelsize": 7, "legend.fontsize": 7,
+}
+# 1.5× scaled fonts for single-column figures
+_SINGLE_COL_FONT = {k: v * 1.5 for k, v in _BASE_FONT.items()}
+
+def _set_single_col_font():
+    plt.rcParams.update(_SINGLE_COL_FONT)
+
+def _restore_font():
+    plt.rcParams.update(_BASE_FONT)
+
 
 def add_panel_label(ax, label, x=-0.12, y=1.08):
     """Add bold lowercase panel label, e.g. '(a)'."""
@@ -103,8 +117,8 @@ def late_novelty_rate(df, start=15000, end=20000):
 def figure1():
     print("Figure 1: Grid snapshots")
     snap_dir = os.path.join(RESULTS, "snapshots")
-    steps = [5000, 10000, 20000]
-    step_labels = ["$t=5{,}000$", "$t=10{,}000$", "$t=20{,}000$"]
+    steps = [2000, 5000, 10000]
+    step_labels = ["$t=2{,}000$", "$t=5{,}000$", "$t=10{,}000$"]
     L_vals = [200, 400]
     nrows, ncols = len(L_vals), len(steps)
     CROP_TOP = 45  # remove baked-in title text from source PNGs
@@ -144,47 +158,67 @@ def figure1():
 # ═══════════════════════════════════════════════════════════════════════
 def figure2():
     print("Figure 2: Long-run dynamics")
+    _set_single_col_font()
     ls_dir = os.path.join(RESULTS, "large_space")
     sizes = [100, 200, 400]
-    colors = [PALETTE[0], PALETTE[1], PALETTE[2]]
-    labels = [f"$L={s}$" for s in sizes]
+    colors = {100: PALETTE[0], 200: PALETTE[1], 400: PALETTE[2]}
 
     data = {}
     for L in sizes:
         path = os.path.join(ls_dir, f"L{L}", "summary.csv")
         data[L] = pd.read_csv(path)
 
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.6))
-    metrics = [
-        ("mean_fitness_mean", "mean_fitness_std", "Mean hash score"),
-        ("max_fitness_mean", "max_fitness_std", "Max hash score"),
-        ("mean_size_mean", "mean_size_std", "Mean component size"),
-        ("cum_pattern_types_mean", "cum_pattern_types_std", "Cumulative pattern types"),
-    ]
-    panel_labels = ["a", "b", "c", "d"]
+    # Layout: 3 rows x 2 cols
+    # Row 0: (a) mean hash score, (b) max hash score   — all L together
+    # Row 1: (c) mean size L=100,200, (d) mean size L=400
+    # Row 2: (e) cum patterns L=100,200, (f) cum patterns L=400
+    fig, axes = plt.subplots(3, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.85))
 
-    for idx, (ax, (m, s, ylabel), pl) in enumerate(zip(axes.flat, metrics, panel_labels)):
-        for L, c, lb in zip(sizes, colors, labels):
+    def _plot(ax, L_list, metric, std_col, ylabel, legend=True):
+        for L in L_list:
             df = data[L]
             steps = df["step"].values
-            mask = steps > 0  # skip step 0 for log scale
+            mask = steps > 0
             x = steps[mask]
-            y = df[m].values[mask]
-            ys = df[s].values[mask]
-            ax.plot(x, y, color=c, label=lb, linewidth=1.2)
-            ax.fill_between(x, y - ys, y + ys, color=c, alpha=0.2)
+            y = df[metric].values[mask]
+            ys = df[std_col].values[mask]
+            ax.plot(x, y, color=colors[L], label=f"$L={L}$", linewidth=1.2)
+            ax.fill_between(x, y - ys, y + ys, color=colors[L], alpha=0.2)
         ax.set_xscale("log")
         ax.set_xlabel("Step")
         ax.set_ylabel(ylabel)
-        add_panel_label(ax, pl)
-        if idx == 2:
-            ax.set_yscale("log")
-        if idx == 3:
-            ax.set_yscale("log")
+        if legend:
+            ax.legend(loc="best", frameon=False, fontsize=6)
 
-    axes[0, 0].legend(loc="lower right", frameon=False)
+    # Row 0: hash scores (all L, shared axes)
+    _plot(axes[0, 0], sizes, "mean_fitness_mean", "mean_fitness_std", "Mean hash score")
+    add_panel_label(axes[0, 0], "a")
+    _plot(axes[0, 1], sizes, "max_fitness_mean", "max_fitness_std", "Max hash score")
+    add_panel_label(axes[0, 1], "b")
+
+    # Row 1: mean component size — split by L (linear y-scale)
+    _plot(axes[1, 0], [100, 200], "mean_size_mean", "mean_size_std",
+          "Mean component size")
+    axes[1, 0].set_ylim(bottom=0)
+    add_panel_label(axes[1, 0], "c")
+    _plot(axes[1, 1], [400], "mean_size_mean", "mean_size_std",
+          "Mean component size")
+    axes[1, 1].set_ylim(bottom=0)
+    add_panel_label(axes[1, 1], "d")
+
+    # Row 2: cumulative pattern types — split by L (linear y-scale)
+    _plot(axes[2, 0], [100, 200], "cum_pattern_types_mean", "cum_pattern_types_std",
+          "Cumulative pattern types")
+    axes[2, 0].set_ylim(bottom=0)
+    add_panel_label(axes[2, 0], "e")
+    _plot(axes[2, 1], [400], "cum_pattern_types_mean", "cum_pattern_types_std",
+          "Cumulative pattern types")
+    axes[2, 1].set_ylim(bottom=0)
+    add_panel_label(axes[2, 1], "f")
+
     fig.tight_layout()
     save(fig, "fig2_dynamics")
+    _restore_font()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -192,11 +226,13 @@ def figure2():
 # ═══════════════════════════════════════════════════════════════════════
 def figure3():
     print("Figure 3: Stochastic crossover scan")
+    _set_single_col_font()
     coarse = pd.read_csv(os.path.join(RESULTS, "transition_scan", "analysis", "transition_analysis.csv"))
     fine = pd.read_csv(os.path.join(RESULTS, "fine_transition_scan", "analysis", "fine_transition_analysis.csv"))
     pss = pd.read_csv(os.path.join(RESULTS, "statistical_analysis", "per_size_summary.csv"))
 
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.62))
+    _restore_font()  # use base font — double-col has enough space
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.55))
     rng = np.random.default_rng(42)
 
     # ── Panel (a): final-size distributions with medians and IQR ──
@@ -258,7 +294,7 @@ def figure3():
                 markersize=3.5, linewidth=0.8, capsize=2, label="Fine median/IQR")
     ax.set_yscale("log")
     ax.set_ylabel("Mean size (final step)")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.axvspan(300, 320, alpha=0.1, color="grey", label="Crossover region")
     ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "a")
@@ -272,7 +308,7 @@ def figure3():
     ax.axhline(0, color="grey", linewidth=0.5, linestyle=":")
     ax.axvspan(300, 320, alpha=0.1, color="grey")
     ax.set_ylabel("Corr(mean size, mean score)")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.legend(loc="lower left", frameon=False, fontsize=6)
     add_panel_label(ax, "b")
 
@@ -294,7 +330,7 @@ def figure3():
                 fmt="s--", color=PALETTE[1], markersize=3.5, linewidth=0.8, capsize=2, label="Fine")
     ax.axvspan(300, 320, alpha=0.1, color="grey")
     ax.set_ylabel("Runaway probability")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylim(-0.05, 1.05)
     ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "c")
@@ -314,12 +350,13 @@ def figure3():
     ax.axvspan(300, 320, alpha=0.1, color="grey")
     ax.set_yscale("log")
     ax.set_ylabel("Late novelty rate")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "d")
 
     fig.tight_layout()
     save(fig, "fig3_transition")
+    _restore_font()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -381,6 +418,7 @@ def figure4():
 # ═══════════════════════════════════════════════════════════════════════
 def figure5():
     print("Figure 5: Time to threshold crossing")
+    _set_single_col_font()
     # Compute from individual runs in transition_scan
     ts_dir = os.path.join(RESULTS, "transition_scan")
     L_values = list(range(200, 420, 20))
@@ -398,7 +436,8 @@ def figure5():
                 if len(crossed) > 0:
                     crossing_data[thr].append({"L": L, "time": crossed["step"].iloc[0]})
 
-    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, SINGLE_COL * 0.6))
+    _restore_font()  # use base font — double-col has enough space
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, SINGLE_COL * 0.75))
     thr_colors = [PALETTE[0], PALETTE[2], PALETTE[3]]
 
     for idx, (thr, ax, c) in enumerate(zip(thresholds, axes, thr_colors)):
@@ -434,7 +473,7 @@ def figure5():
                     ax.scatter(L + jitter, vals, s=8, color=c, alpha=0.6, zorder=3)
 
         ax.axvspan(300, 320, alpha=0.1, color="grey")
-        ax.set_xlabel("System size $L$")
+        ax.set_xlabel("Space size $L$")
         if idx == 0:
             ax.set_ylabel("Crossing time (steps)")
         ax.set_xlim(190, 410)
@@ -446,6 +485,7 @@ def figure5():
 
     fig.tight_layout()
     save(fig, "fig5_crossing_times")
+    _restore_font()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -453,6 +493,7 @@ def figure5():
 # ═══════════════════════════════════════════════════════════════════════
 def figure6():
     print("Figure 6: Mutation rate sensitivity")
+    _set_single_col_font()
     mu_dir = os.path.join(RESULTS, "param_sensitivity_mu")
     mu_vals = [0.001, 0.002, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
@@ -478,7 +519,7 @@ def figure6():
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$\\mu={mu}$")
     ax.set_yscale("log")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean size (final step)")
     ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "a")
@@ -492,8 +533,9 @@ def figure6():
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$\\mu={mu}$")
     ax.set_yscale("log")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Max size (final step)")
+    ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "b")
 
     # ── Panel (c): mean hash score at final step vs L ──
@@ -504,7 +546,7 @@ def figure6():
         yerr = [mu_data[(mu, L)]["mean_fitness_std"] for L in L_vals]
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$\\mu={mu}$")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean hash score (final step)")
     ax.legend(loc="lower left", frameon=False, fontsize=6)
     add_panel_label(ax, "c")
@@ -530,6 +572,7 @@ def figure6():
 
     fig.tight_layout()
     save(fig, "fig6_mu_sensitivity")
+    _restore_font()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -537,6 +580,7 @@ def figure6():
 # ═══════════════════════════════════════════════════════════════════════
 def figure7():
     print("Figure 7: Death probability sensitivity")
+    _set_single_col_font()
     dp_dir = os.path.join(RESULTS, "param_sensitivity_death")
     dp_vals = [0.0005, 0.001, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
@@ -562,7 +606,7 @@ def figure7():
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
     ax.set_yscale("log")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean size (final step)")
     ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "a")
@@ -576,8 +620,9 @@ def figure7():
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
     ax.set_yscale("log")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Max size (final step)")
+    ax.legend(loc="upper left", frameon=False, fontsize=6)
     add_panel_label(ax, "b")
 
     # ── Panel (c): mean hash score at final step vs L ──
@@ -588,7 +633,7 @@ def figure7():
         yerr = [dp_data[(dp, L)]["mean_fitness_std"] for L in L_vals]
         ax.errorbar(xs, ys, yerr=yerr, fmt="o-", color=c, markersize=4,
                     capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean hash score (final step)")
     ax.legend(loc="lower left", frameon=False, fontsize=6)
     add_panel_label(ax, "c")
@@ -614,6 +659,7 @@ def figure7():
 
     fig.tight_layout()
     save(fig, "fig7_death_sensitivity")
+    _restore_font()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -672,7 +718,7 @@ def figure8():
                 linewidth=1.2, label="CRC32 observation")
 
     ax.set_yscale("log")
-    ax.set_xlabel("System size $L$")
+    ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean size (final step)")
     ax.legend(loc="upper left", frameon=False, fontsize=7)
     add_panel_label(ax, "a")
@@ -718,5 +764,5 @@ if __name__ == "__main__":
     figure5()
     figure6()
     figure7()
-    figure8()
+    # figure8() removed — CRC32 section deleted from paper
     print("\nAll figures generated.")
