@@ -1,5 +1,11 @@
 # Structural Cellular Hash Chemistry (Python + JAX)
 
+## Evolution Dynamics
+
+| L=200 (no runaway) | L=400, seed 8 (runaway growth) |
+|:---:|:---:|
+| ![L=200](schc_L200_seed0.gif) | ![L=400](schc_L400_seed8.gif) |
+
 This repository is a Python/JAX port of the Wolfram Mathematica implementation at https://github.com/hsayama/Structural-Cellular-Hash-Chemistry. It reproduces the Structural Cellular Hash Chemistry (SCHC) model with GPU-capable simulation and figure-generation scripts approximating Figures 4, 5, and 6 from the paper (arXiv:2412.12790).
 
 ## Model overview
