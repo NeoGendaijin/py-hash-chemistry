@@ -25,6 +25,33 @@ from src import SCHCParams, advance_one_step_jit, initialize_state
 SNAPSHOT_STEPS = [0, 100, 500, 2000, 5000, 10000, 20000]
 
 
+def find_largest_component(config_np: np.ndarray) -> np.ndarray:
+    """Find the largest connected component (8-connectivity) using scipy.
+    Returns a boolean mask of the largest component."""
+    from scipy import ndimage
+    occupied = config_np > 0
+    if not occupied.any():
+        return np.zeros_like(occupied)
+    labeled, n_components = ndimage.label(occupied, structure=np.ones((3, 3)))
+    if n_components == 0:
+        return np.zeros_like(occupied)
+    sizes = ndimage.sum(occupied, labeled, range(1, n_components + 1))
+    largest_label = np.argmax(sizes) + 1
+    return labeled == largest_label
+
+
+def largest_component_outline(config_np: np.ndarray) -> np.ndarray:
+    """Return a boolean mask of the boundary pixels of the largest component.
+    A pixel is on the boundary if it belongs to the largest component and
+    at least one of its 8-neighbors does not."""
+    from scipy.ndimage import binary_erosion
+    largest = find_largest_component(config_np)
+    if not largest.any():
+        return largest
+    interior = binary_erosion(largest, structure=np.ones((3, 3)))
+    return largest & ~interior
+
+
 def make_colormap(k: int):
     """Create a colormap: 0=white (empty), 1..k=HSV colors."""
     colors = [np.array([1.0, 1.0, 1.0, 1.0])]  # white for empty
@@ -59,9 +86,14 @@ def save_snapshot(config_np: np.ndarray, outpath: Path, step: int, size: int, k:
         rgb = hsv_to_rgb(hsv)
         img[occupied] = rgb
 
+        # Outline the largest connected component in black
+        outline = largest_component_outline(config_np)
+        img[outline] = [0.0, 0.0, 0.0]  # black outline
+
+    largest_size = int(find_largest_component(config_np).sum()) if occupied.any() else 0
     fig, ax = plt.subplots(1, 1, figsize=(6, 6))
     ax.imshow(img, interpolation="nearest", origin="upper")
-    ax.set_title(f"L={size}, step={step}", fontsize=14)
+    ax.set_title(f"L={size}, step={step}, max comp.={largest_size}", fontsize=14)
     ax.axis("off")
     plt.tight_layout()
     plt.savefig(outpath, dpi=150, bbox_inches="tight")
@@ -89,6 +121,8 @@ def save_composite(snapshots: dict, outdir: Path, size: int, k: int):
             from matplotlib.colors import hsv_to_rgb
             rgb = hsv_to_rgb(hsv)
             img[occupied] = rgb
+            outline = largest_component_outline(config_np)
+            img[outline] = [0.0, 0.0, 0.0]
         ax.imshow(img, interpolation="nearest", origin="upper")
         ax.set_title(f"t={step}", fontsize=12)
         ax.axis("off")

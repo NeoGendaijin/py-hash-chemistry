@@ -5,4 +5,6 @@ __pycache__/
 *.DS_Store
 results/**/*.log
 results/**/*.csv
+results/gifs/frames_*/
+results/gifs/configs_*/
 tex/
