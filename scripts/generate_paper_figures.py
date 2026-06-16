@@ -188,7 +188,7 @@ def figure2():
         ax.set_xlabel("Step")
         ax.set_ylabel(ylabel)
         if legend:
-            ax.legend(loc="best", frameon=False, fontsize=6)
+            ax.legend(loc="best", frameon=False, fontsize=9)
 
     # Row 0: hash scores (all L, shared axes)
     _plot(axes[0, 0], sizes, "mean_fitness_mean", "mean_fitness_std", "Mean hash score")
@@ -232,11 +232,11 @@ def figure3():
     pss = pd.read_csv(os.path.join(RESULTS, "statistical_analysis", "per_size_summary.csv"))
 
     _restore_font()  # use base font — double-col has enough space
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.55))
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, DOUBLE_COL * 0.32))
     rng = np.random.default_rng(42)
 
     # ── Panel (a): final-size distributions with medians and IQR ──
-    ax = axes[0, 0]
+    ax = axes[0]
     coarse_L = pss["L"].values.astype(int)
     fine_L = fine["L"].values.astype(int)
     coarse_median, coarse_q1, coarse_q3 = [], [], []
@@ -295,12 +295,12 @@ def figure3():
     ax.set_yscale("log")
     ax.set_ylabel("Mean size (final step)")
     ax.set_xlabel("Space size $L$")
-    ax.axvspan(300, 320, alpha=0.1, color="grey", label="Crossover region")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.axvspan(300, 320, alpha=0.1, color="grey", label="Transition region")
+    ax.legend(loc="upper left", frameon=False, fontsize=7)
     add_panel_label(ax, "a")
 
     # ── Panel (b): temporal correlation(mean size, mean score) vs L ──
-    ax = axes[0, 1]
+    ax = axes[1]
     ax.plot(coarse["L"], coarse["corr_size_fitness_2k_10k"], "o-", color=PALETTE[0],
             markersize=4, label="Coarse")
     ax.plot(fine["L"], fine["corr_size_fitness_2k_10k"], "s--", color=PALETTE[1],
@@ -309,11 +309,11 @@ def figure3():
     ax.axvspan(300, 320, alpha=0.1, color="grey")
     ax.set_ylabel("Corr(mean size, mean score)")
     ax.set_xlabel("Space size $L$")
-    ax.legend(loc="lower left", frameon=False, fontsize=6)
+    ax.legend(loc="lower left", frameon=False, fontsize=7)
     add_panel_label(ax, "b")
 
     # ── Panel (c): runaway probability vs L ──
-    ax = axes[1, 0]
+    ax = axes[2]
     coarse_low, coarse_high = [], []
     for frac, count, n_runs in zip(coarse_runaway_fraction, coarse_runaway_count, coarse_n_runs):
         lo, hi = wilson_interval(count, n_runs)
@@ -332,27 +332,8 @@ def figure3():
     ax.set_ylabel("Runaway probability")
     ax.set_xlabel("Space size $L$")
     ax.set_ylim(-0.05, 1.05)
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.legend(loc="upper left", frameon=False, fontsize=7)
     add_panel_label(ax, "c")
-
-    # ── Panel (d): late-window novelty rate vs L ──
-    ax = axes[1, 1]
-    coarse_novelty = []
-    for L in coarse_L:
-        df = pd.read_csv(os.path.join(RESULTS, "transition_scan", f"L{L}", "summary.csv"))
-        coarse_novelty.append(late_novelty_rate(df))
-    fine_novelty = []
-    for L in fine_L:
-        df = pd.read_csv(os.path.join(RESULTS, "fine_transition_scan", f"L{L}", "summary.csv"))
-        fine_novelty.append(late_novelty_rate(df))
-    ax.plot(coarse_L, coarse_novelty, "o-", color=PALETTE[0], markersize=4, label="Coarse")
-    ax.plot(fine_L, fine_novelty, "s--", color=PALETTE[1], markersize=3.5, label="Fine")
-    ax.axvspan(300, 320, alpha=0.1, color="grey")
-    ax.set_yscale("log")
-    ax.set_ylabel("Late novelty rate")
-    ax.set_xlabel("Space size $L$")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
-    add_panel_label(ax, "d")
 
     fig.tight_layout()
     save(fig, "fig3_transition")
@@ -521,7 +502,7 @@ def figure6():
     ax.set_yscale("log")
     ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean size (final step)")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "a")
 
     # ── Panel (b): max size at final step vs L for each mu ──
@@ -535,7 +516,7 @@ def figure6():
     ax.set_yscale("log")
     ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Max size (final step)")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "b")
 
     # ── Panel (c): mean hash score at final step vs L ──
@@ -548,7 +529,7 @@ def figure6():
                     capsize=2, linewidth=1.0, label=f"$\\mu={mu}$")
     ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean hash score (final step)")
-    ax.legend(loc="lower left", frameon=False, fontsize=6)
+    ax.legend(loc="lower left", frameon=False, fontsize=9)
     add_panel_label(ax, "c")
 
     # ── Panel (d): time series of mean size for L=400 across mu values ──
@@ -567,7 +548,7 @@ def figure6():
     ax.set_yscale("log")
     ax.set_xlabel("Step")
     ax.set_ylabel("Mean size ($L=400$)")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "d")
 
     fig.tight_layout()
@@ -608,7 +589,7 @@ def figure7():
     ax.set_yscale("log")
     ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean size (final step)")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "a")
 
     # ── Panel (b): max size at final step vs L for each death_prob ──
@@ -622,7 +603,7 @@ def figure7():
     ax.set_yscale("log")
     ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Max size (final step)")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "b")
 
     # ── Panel (c): mean hash score at final step vs L ──
@@ -635,7 +616,7 @@ def figure7():
                     capsize=2, linewidth=1.0, label=f"$p_{{\\mathrm{{death}}}}={dp}$")
     ax.set_xlabel("Space size $L$")
     ax.set_ylabel("Mean hash score (final step)")
-    ax.legend(loc="lower left", frameon=False, fontsize=6)
+    ax.legend(loc="lower left", frameon=False, fontsize=9)
     add_panel_label(ax, "c")
 
     # ── Panel (d): time series of mean size for L=320 across death_prob values ──
@@ -654,7 +635,7 @@ def figure7():
     ax.set_yscale("log")
     ax.set_xlabel("Step")
     ax.set_ylabel("Mean size ($L=320$)")
-    ax.legend(loc="upper left", frameon=False, fontsize=6)
+    ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "d")
 
     fig.tight_layout()
