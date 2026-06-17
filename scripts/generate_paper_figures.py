@@ -82,6 +82,15 @@ def add_panel_label(ax, label, x=-0.12, y=1.08):
             fontsize=9, fontweight="bold", va="top", ha="left")
 
 
+def _frame_legend(leg):
+    """Style a legend with a light grey box for readability."""
+    frame = leg.get_frame()
+    frame.set_edgecolor("0.7")
+    frame.set_facecolor("white")
+    frame.set_linewidth(0.5)
+    return leg
+
+
 def save(fig, name):
     """Save as both PDF and PNG."""
     fig.savefig(os.path.join(FIG_DIR, f"{name}.pdf"), format="pdf")
@@ -218,8 +227,8 @@ def figure2():
 
     # Single shared legend above the panels (avoids overlap with curves)
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False,
-               bbox_to_anchor=(0.5, 1.0), fontsize=9)
+    _frame_legend(fig.legend(handles, labels, loc="upper center", ncol=3, frameon=True,
+               bbox_to_anchor=(0.5, 1.0), fontsize=9))
     fig.tight_layout(rect=[0, 0, 1, 0.95], h_pad=2.2, w_pad=2.0)
     save(fig, "fig2_dynamics")
     _restore_font()
@@ -338,8 +347,8 @@ def figure3():
 
     # Single shared legend below the three panels
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False,
-               bbox_to_anchor=(0.5, -0.02), fontsize=8)
+    _frame_legend(fig.legend(handles, labels, loc="lower center", ncol=3, frameon=True,
+               bbox_to_anchor=(0.5, -0.02), fontsize=8))
     fig.tight_layout(rect=[0, 0.08, 1, 1])
     save(fig, "fig3_transition")
     _restore_font()
@@ -554,8 +563,8 @@ def figure6():
 
     # Single shared legend above the panels
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncol=4, frameon=False,
-               fontsize=9)
+    _frame_legend(fig.legend(handles, labels, loc="outside upper center", ncol=4, frameon=True,
+               fontsize=9))
     save(fig, "fig6_mu_sensitivity")
     _restore_font()
 
@@ -640,8 +649,8 @@ def figure7():
 
     # Single shared legend above the panels
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncol=4, frameon=False,
-               fontsize=9)
+    _frame_legend(fig.legend(handles, labels, loc="outside upper center", ncol=4, frameon=True,
+               fontsize=9))
     save(fig, "fig7_death_sensitivity")
     _restore_font()
 
