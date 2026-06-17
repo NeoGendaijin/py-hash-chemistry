@@ -362,7 +362,7 @@ def figure4():
     cmap = plt.cm.coolwarm
     colors = [cmap(i / (n - 1)) for i in range(n)]
 
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL, SINGLE_COL * 0.65))
+    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COL, SINGLE_COL * 1.25))
 
     for i, L in enumerate(L_vals):
         df = pd.read_csv(os.path.join(fine_dir, f"L{L}", "summary.csv"))
@@ -428,8 +428,8 @@ def figure5():
                 if len(crossed) > 0:
                     crossing_data[thr].append({"L": L, "time": crossed["step"].iloc[0]})
 
-    _restore_font()  # use base font — double-col has enough space
-    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, SINGLE_COL * 0.75))
+    _restore_font()  # use base font for single-column native rendering
+    fig, axes = plt.subplots(3, 1, figsize=(SINGLE_COL, SINGLE_COL * 1.7), layout="constrained")
     thr_colors = [PALETTE[0], PALETTE[2], PALETTE[3]]
 
     for idx, (thr, ax, c) in enumerate(zip(thresholds, axes, thr_colors)):
@@ -465,9 +465,9 @@ def figure5():
                     ax.scatter(L + jitter, vals, s=8, color=c, alpha=0.6, zorder=3)
 
         ax.axvspan(300, 320, alpha=0.1, color="grey")
-        ax.set_xlabel("Space size $L$")
-        if idx == 0:
-            ax.set_ylabel("Crossing time (steps)")
+        if idx == 2:
+            ax.set_xlabel("Space size $L$")
+        ax.set_ylabel("Crossing time (steps)")
         ax.set_xlim(190, 410)
         label_map = {10: "\\bar{s} \\geq 10", 100: "\\bar{s} \\geq 100", 1000: "\\bar{s} \\geq 1000"}
         ax.text(0.95, 0.95, f"${label_map[thr]}$", transform=ax.transAxes,
@@ -475,7 +475,6 @@ def figure5():
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="grey", alpha=0.8))
         add_panel_label(ax, chr(ord("a") + idx))
 
-    fig.tight_layout()
     save(fig, "fig5_crossing_times")
     _restore_font()
 
@@ -485,7 +484,6 @@ def figure5():
 # ═══════════════════════════════════════════════════════════════════════
 def figure6():
     print("Figure 6: Mutation rate sensitivity")
-    _set_single_col_font()
     mu_dir = os.path.join(RESULTS, "param_sensitivity_mu")
     mu_vals = [0.001, 0.002, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
@@ -500,7 +498,7 @@ def figure6():
             df = pd.read_csv(path)
             mu_data[(mu, L)] = df.iloc[-1]
 
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.62), layout="constrained")
+    fig, axes = plt.subplots(2, 2, figsize=(SINGLE_COL, SINGLE_COL * 0.95), layout="constrained")
 
     # ── Panel (a): mean size at final step vs L for each mu ──
     ax = axes[0, 0]
@@ -571,7 +569,6 @@ def figure6():
 # ═══════════════════════════════════════════════════════════════════════
 def figure7():
     print("Figure 7: Death probability sensitivity")
-    _set_single_col_font()
     dp_dir = os.path.join(RESULTS, "param_sensitivity_death")
     dp_vals = [0.0005, 0.001, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
@@ -586,7 +583,7 @@ def figure7():
             df = pd.read_csv(path)
             dp_data[(dp, L)] = df.iloc[-1]
 
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.62), layout="constrained")
+    fig, axes = plt.subplots(2, 2, figsize=(SINGLE_COL, SINGLE_COL * 0.95), layout="constrained")
 
     # ── Panel (a): mean size at final step vs L for each death_prob ──
     ax = axes[0, 0]
