@@ -163,72 +163,60 @@ def figure2():
     sizes = [100, 200, 400]
     colors = {100: PALETTE[0], 200: PALETTE[1], 400: PALETTE[2]}
 
-    # mean/std summaries (for low-variance hash-score panels)
-    summ = {L: pd.read_csv(os.path.join(ls_dir, f"L{L}", "summary.csv")) for L in sizes}
+    data = {}
+    for L in sizes:
+        path = os.path.join(ls_dir, f"L{L}", "summary.csv")
+        data[L] = pd.read_csv(path)
 
-    # median/IQR across per-seed runs (for highly-skewed size & novelty panels)
-    def _median_iqr(L, metric):
-        runs = os.path.join(ls_dir, f"L{L}", "runs")
-        files = sorted(f for f in os.listdir(runs)
-                       if f.startswith("seed_") and f.endswith(".csv"))
-        mats, steps_ref = [], None
-        for f in files:
-            df = pd.read_csv(os.path.join(runs, f), usecols=["step", metric])
-            if steps_ref is None:
-                steps_ref = df["step"].values
-            mats.append(df[metric].values)
-        n = min(len(a) for a in mats)
-        M = np.vstack([a[:n] for a in mats])
-        steps_ref = steps_ref[:n]
-        return (steps_ref, np.median(M, axis=0),
-                np.percentile(M, 25, axis=0), np.percentile(M, 75, axis=0))
+    # Layout: 3 rows x 2 cols
+    # Row 0: (a) mean hash score, (b) max hash score   — all L together
+    # Row 1: (c) mean size L=100,200, (d) mean size L=400
+    # Row 2: (e) cum patterns L=100,200, (f) cum patterns L=400
+    fig, axes = plt.subplots(3, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.85))
 
-    fig, axes = plt.subplots(3, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.85),
-                             layout="constrained")
-
-    def _plot_mean(ax, L_list, mean_col, std_col, ylabel, legend=True):
+    def _plot(ax, L_list, metric, std_col, ylabel, legend=True):
         for L in L_list:
-            df = summ[L]; steps = df["step"].values; m = steps > 0
-            x = steps[m]; y = df[mean_col].values[m]; s = df[std_col].values[m]
+            df = data[L]
+            steps = df["step"].values
+            mask = steps > 0
+            x = steps[mask]
+            y = df[metric].values[mask]
+            ys = df[std_col].values[mask]
             ax.plot(x, y, color=colors[L], label=f"$L={L}$", linewidth=1.2)
-            ax.fill_between(x, y - s, y + s, color=colors[L], alpha=0.2)
-        ax.set_xscale("log"); ax.set_xlabel("Step")
-        if ylabel:
-            ax.set_ylabel(ylabel)
+            ax.fill_between(x, y - ys, y + ys, color=colors[L], alpha=0.2)
+        ax.set_xscale("log")
+        ax.set_xlabel("Step")
+        ax.set_ylabel(ylabel)
         if legend:
             ax.legend(loc="best", frameon=False, fontsize=9)
 
-    def _plot_median(ax, L_list, metric, ylabel, legend=True):
-        for L in L_list:
-            steps, med, q1, q3 = _median_iqr(L, metric)
-            m = steps > 0
-            ax.plot(steps[m], med[m], color=colors[L], label=f"$L={L}$", linewidth=1.2)
-            ax.fill_between(steps[m], q1[m], q3[m], color=colors[L], alpha=0.2)
-        ax.set_xscale("log"); ax.set_xlabel("Step")
-        ax.set_ylim(bottom=0)
-        if ylabel:
-            ax.set_ylabel(ylabel)
-        if legend:
-            ax.legend(loc="best", frameon=False, fontsize=9)
-
-    # Row 0: hash scores (mean +/- s.d.; low variance), all L together
-    _plot_mean(axes[0, 0], sizes, "mean_fitness_mean", "mean_fitness_std", "Mean hash score")
+    # Row 0: hash scores (all L, shared axes)
+    _plot(axes[0, 0], sizes, "mean_fitness_mean", "mean_fitness_std", "Mean hash score")
     add_panel_label(axes[0, 0], "a")
-    _plot_mean(axes[0, 1], sizes, "max_fitness_mean", "max_fitness_std", "Max hash score")
+    _plot(axes[0, 1], sizes, "max_fitness_mean", "max_fitness_std", "Max hash score")
     add_panel_label(axes[0, 1], "b")
 
-    # Row 1: mean component size (median + IQR), split by L; y-label shared on left
-    _plot_median(axes[1, 0], [100, 200], "mean_size", "Mean component size")
+    # Row 1: mean component size — split by L (linear y-scale)
+    _plot(axes[1, 0], [100, 200], "mean_size_mean", "mean_size_std",
+          "Mean component size")
+    axes[1, 0].set_ylim(bottom=0)
     add_panel_label(axes[1, 0], "c")
-    _plot_median(axes[1, 1], [400], "mean_size", None)
+    _plot(axes[1, 1], [400], "mean_size_mean", "mean_size_std",
+          "Mean component size")
+    axes[1, 1].set_ylim(bottom=0)
     add_panel_label(axes[1, 1], "d")
 
-    # Row 2: cumulative pattern types (median + IQR), split by L; y-label shared on left
-    _plot_median(axes[2, 0], [100, 200], "cum_pattern_types", "Cumulative pattern types")
+    # Row 2: cumulative pattern types — split by L (linear y-scale)
+    _plot(axes[2, 0], [100, 200], "cum_pattern_types_mean", "cum_pattern_types_std",
+          "Cumulative pattern types")
+    axes[2, 0].set_ylim(bottom=0)
     add_panel_label(axes[2, 0], "e")
-    _plot_median(axes[2, 1], [400], "cum_pattern_types", None)
+    _plot(axes[2, 1], [400], "cum_pattern_types_mean", "cum_pattern_types_std",
+          "Cumulative pattern types")
+    axes[2, 1].set_ylim(bottom=0)
     add_panel_label(axes[2, 1], "f")
 
+    fig.tight_layout()
     save(fig, "fig2_dynamics")
     _restore_font()
 
@@ -244,7 +232,7 @@ def figure3():
     pss = pd.read_csv(os.path.join(RESULTS, "statistical_analysis", "per_size_summary.csv"))
 
     _restore_font()  # use base font — double-col has enough space
-    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, DOUBLE_COL * 0.34), layout="constrained")
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, DOUBLE_COL * 0.32))
     rng = np.random.default_rng(42)
 
     # ── Panel (a): final-size distributions with medians and IQR ──
@@ -341,12 +329,13 @@ def figure3():
     ax.errorbar(fine_L, fine_runaway_fraction, yerr=[fine_low, fine_high],
                 fmt="s--", color=PALETTE[1], markersize=3.5, linewidth=0.8, capsize=2, label="Fine")
     ax.axvspan(300, 320, alpha=0.1, color="grey")
-    ax.set_ylabel("Runaway fraction")
+    ax.set_ylabel("Runaway probability")
     ax.set_xlabel("Space size $L$")
     ax.set_ylim(-0.05, 1.05)
     ax.legend(loc="upper left", frameon=False, fontsize=7)
     add_panel_label(ax, "c")
 
+    fig.tight_layout()
     save(fig, "fig3_transition")
     _restore_font()
 
@@ -362,7 +351,7 @@ def figure4():
     cmap = plt.cm.coolwarm
     colors = [cmap(i / (n - 1)) for i in range(n)]
 
-    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COL, SINGLE_COL * 1.25))
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL, SINGLE_COL * 0.65))
 
     for i, L in enumerate(L_vals):
         df = pd.read_csv(os.path.join(fine_dir, f"L{L}", "summary.csv"))
@@ -428,8 +417,8 @@ def figure5():
                 if len(crossed) > 0:
                     crossing_data[thr].append({"L": L, "time": crossed["step"].iloc[0]})
 
-    _restore_font()  # use base font for single-column native rendering
-    fig, axes = plt.subplots(3, 1, figsize=(SINGLE_COL, SINGLE_COL * 1.7), layout="constrained")
+    _restore_font()  # use base font — double-col has enough space
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COL, SINGLE_COL * 0.75))
     thr_colors = [PALETTE[0], PALETTE[2], PALETTE[3]]
 
     for idx, (thr, ax, c) in enumerate(zip(thresholds, axes, thr_colors)):
@@ -465,9 +454,9 @@ def figure5():
                     ax.scatter(L + jitter, vals, s=8, color=c, alpha=0.6, zorder=3)
 
         ax.axvspan(300, 320, alpha=0.1, color="grey")
-        if idx == 2:
-            ax.set_xlabel("Space size $L$")
-        ax.set_ylabel("Crossing time (steps)")
+        ax.set_xlabel("Space size $L$")
+        if idx == 0:
+            ax.set_ylabel("Crossing time (steps)")
         ax.set_xlim(190, 410)
         label_map = {10: "\\bar{s} \\geq 10", 100: "\\bar{s} \\geq 100", 1000: "\\bar{s} \\geq 1000"}
         ax.text(0.95, 0.95, f"${label_map[thr]}$", transform=ax.transAxes,
@@ -475,6 +464,7 @@ def figure5():
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="grey", alpha=0.8))
         add_panel_label(ax, chr(ord("a") + idx))
 
+    fig.tight_layout()
     save(fig, "fig5_crossing_times")
     _restore_font()
 
@@ -484,6 +474,7 @@ def figure5():
 # ═══════════════════════════════════════════════════════════════════════
 def figure6():
     print("Figure 6: Mutation rate sensitivity")
+    _set_single_col_font()
     mu_dir = os.path.join(RESULTS, "param_sensitivity_mu")
     mu_vals = [0.001, 0.002, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
@@ -498,7 +489,7 @@ def figure6():
             df = pd.read_csv(path)
             mu_data[(mu, L)] = df.iloc[-1]
 
-    fig, axes = plt.subplots(2, 2, figsize=(SINGLE_COL, SINGLE_COL * 0.95), layout="constrained")
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.55))
 
     # ── Panel (a): mean size at final step vs L for each mu ──
     ax = axes[0, 0]
@@ -560,6 +551,7 @@ def figure6():
     ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "d")
 
+    fig.tight_layout()
     save(fig, "fig6_mu_sensitivity")
     _restore_font()
 
@@ -569,6 +561,7 @@ def figure6():
 # ═══════════════════════════════════════════════════════════════════════
 def figure7():
     print("Figure 7: Death probability sensitivity")
+    _set_single_col_font()
     dp_dir = os.path.join(RESULTS, "param_sensitivity_death")
     dp_vals = [0.0005, 0.001, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
@@ -583,7 +576,7 @@ def figure7():
             df = pd.read_csv(path)
             dp_data[(dp, L)] = df.iloc[-1]
 
-    fig, axes = plt.subplots(2, 2, figsize=(SINGLE_COL, SINGLE_COL * 0.95), layout="constrained")
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL, DOUBLE_COL * 0.55))
 
     # ── Panel (a): mean size at final step vs L for each death_prob ──
     ax = axes[0, 0]
@@ -645,6 +638,7 @@ def figure7():
     ax.legend(loc="upper left", frameon=False, fontsize=9)
     add_panel_label(ax, "d")
 
+    fig.tight_layout()
     save(fig, "fig7_death_sensitivity")
     _restore_font()
 
