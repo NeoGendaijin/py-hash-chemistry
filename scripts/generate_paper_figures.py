@@ -563,8 +563,8 @@ def figure6():
 
     # Single shared legend above the panels
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    _frame_legend(fig.legend(handles, labels, loc="outside upper center", ncol=4, frameon=True,
-               fontsize=9))
+    _frame_legend(fig.legend(handles, labels, loc="lower center", ncol=4, frameon=True,
+               bbox_to_anchor=(0.5, 1.02), fontsize=9))
     save(fig, "fig6_mu_sensitivity")
     _restore_font()
 
@@ -649,8 +649,8 @@ def figure7():
 
     # Single shared legend above the panels
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    _frame_legend(fig.legend(handles, labels, loc="outside upper center", ncol=4, frameon=True,
-               fontsize=9))
+    _frame_legend(fig.legend(handles, labels, loc="lower center", ncol=4, frameon=True,
+               bbox_to_anchor=(0.5, 1.02), fontsize=9))
     save(fig, "fig7_death_sensitivity")
     _restore_font()
 
