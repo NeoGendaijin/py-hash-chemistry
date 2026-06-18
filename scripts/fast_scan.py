@@ -171,12 +171,15 @@ def main():
     parser.add_argument("--n", type=int, default=10)
     parser.add_argument("--mu", type=str, default="0.002/0.999")
     parser.add_argument("--death-prob", type=float, default=0.001)
+    parser.add_argument("--periodic", action="store_true",
+                        help="Use periodic (toroidal) boundaries instead of open boundaries")
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--progress-interval", type=int, default=1000)
     args = parser.parse_args()
 
     mu_val = float(eval(str(args.mu), {"__builtins__": None}, {}))
-    params = SCHCParams(k=args.k, n=args.n, L=args.size, mu=mu_val, death_prob=args.death_prob)
+    params = SCHCParams(k=args.k, n=args.n, L=args.size, mu=mu_val,
+                        death_prob=args.death_prob, periodic=args.periodic)
 
     run_dir = args.output_root / f"L{args.size}" / "runs"
     outpath = run_dir / f"seed_{args.seed}.csv"

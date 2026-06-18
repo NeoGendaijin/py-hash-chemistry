@@ -20,6 +20,7 @@ class SCHCParams:
     L: int = 100
     mu: float = 0.002 / 0.999
     death_prob: float = 0.001
+    periodic: bool = False  # False: open boundaries (clip); True: periodic (toroidal, wrap)
 
 
 @register_pytree_node_class
@@ -168,6 +169,25 @@ def _rewrite(
     tx, ty = jnp.meshgrid(start[0] + x_offsets, start[1] + y_offsets, indexing="ij")
 
     within_shape = (x_offsets[:, None] < block_shape[0]) & (y_offsets[None, :] < block_shape[1])
+
+    if params.periodic:
+        # Toroidal boundaries: wrap source and target coordinates modulo L,
+        # so a structure's footprint is never clipped at the grid edge.
+        gx_idx = jnp.mod(gx, L)
+        gy_idx = jnp.mod(gy, L)
+        tx_idx = jnp.mod(tx, L)
+        ty_idx = jnp.mod(ty, L)
+        valid = within_shape
+        source_vals = jnp.where(valid, config[gx_idx, gy_idx], 0).astype(jnp.int32)
+        mutated, rng = _mutate(source_vals.reshape(-1), rng, params)
+        mutated = mutated.reshape(source_vals.shape)
+        tx_idx = jnp.where(valid, tx_idx, 0)
+        ty_idx = jnp.where(valid, ty_idx, 0)
+        updates = jnp.where(valid, mutated, config[tx_idx, ty_idx])
+        new_config = config.at[tx_idx, ty_idx].set(updates)
+        return new_config, rng
+
+    # Open boundaries: any cell falling outside the L x L domain is clipped (dropped).
     valid = (
         within_shape
         & (gx >= 0)
