@@ -492,7 +492,8 @@ def figure6():
     mu_dir = os.path.join(RESULTS, "param_sensitivity_mu")
     mu_vals = [0.001, 0.002, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
-    mu_colors = [PALETTE[0], PALETTE[1], PALETTE[2], PALETTE[3]]
+    # Ordered parameter -> sequential blue->red colormap (low mu = blue, high mu = red)
+    mu_colors = [plt.cm.coolwarm(i / (len(mu_vals) - 1)) for i in range(len(mu_vals))]
 
     # Read final-step summary from each condition's summary.csv
     mu_data = {}  # (mu, L) -> last row of summary
@@ -578,7 +579,8 @@ def figure7():
     dp_dir = os.path.join(RESULTS, "param_sensitivity_death")
     dp_vals = [0.0005, 0.001, 0.005, 0.01]
     L_vals = [200, 300, 320, 400]
-    dp_colors = [PALETTE[0], PALETTE[1], PALETTE[2], PALETTE[3]]
+    # Ordered parameter -> sequential blue->red colormap (low p_death = blue, high = red)
+    dp_colors = [plt.cm.coolwarm(i / (len(dp_vals) - 1)) for i in range(len(dp_vals))]
 
     # Read final-step summary from each condition's summary.csv
     dp_data = {}
