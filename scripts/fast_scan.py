@@ -106,8 +106,16 @@ def _components_and_metrics(config_np: np.ndarray):
 
 def run_single_sampled(params: SCHCParams, steps: int, seed: int,
                         sample_interval: int = 1,
-                        progress_interval: int = 0):
-    """Run simulation, collecting metrics every sample_interval steps."""
+                        progress_interval: int = 0,
+                        stop_mean_size: float = 0.0):
+    """Run simulation, collecting metrics every sample_interval steps.
+
+    If stop_mean_size > 0, the run terminates early once the mean component
+    size exceeds that value (runaway is then unambiguous). This avoids the
+    extremely heavy flood-fill cost of repeatedly scanning a grid-spanning
+    component for thousands of further steps -- the dominant compute (and the
+    likely cause of sustained max-power GPU load) in the runaway regime.
+    """
     key = random.PRNGKey(seed)
     state = initialize_state(key, params)
 
@@ -133,6 +141,12 @@ def run_single_sampled(params: SCHCParams, steps: int, seed: int,
             if progress_interval and t % progress_interval == 0:
                 print(f"[run seed={seed}] step={t} mean_size={m['mean_size']:.1f}")
                 sys.stdout.flush()
+
+            if stop_mean_size > 0 and m["mean_size"] >= stop_mean_size:
+                print(f"[run seed={seed}] early stop at step={t} "
+                      f"(mean_size={m['mean_size']:.1f} >= {stop_mean_size}); runaway confirmed")
+                sys.stdout.flush()
+                break
 
         if t == steps:
             break
@@ -173,6 +187,9 @@ def main():
     parser.add_argument("--death-prob", type=float, default=0.001)
     parser.add_argument("--periodic", action="store_true",
                         help="Use periodic (toroidal) boundaries instead of open boundaries")
+    parser.add_argument("--stop-mean-size", type=float, default=0.0,
+                        help="Early-stop once mean component size exceeds this (0=off; "
+                             "caps heavy runaway compute / sustained GPU load)")
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--progress-interval", type=int, default=1000)
     args = parser.parse_args()
@@ -191,7 +208,8 @@ def main():
     metrics, sampled_steps = run_single_sampled(
         params, args.steps, args.seed,
         sample_interval=args.sample_interval,
-        progress_interval=args.progress_interval
+        progress_interval=args.progress_interval,
+        stop_mean_size=args.stop_mean_size,
     )
     save_run_csv(metrics, sampled_steps, run_dir, args.seed)
     print(f"[done] L={args.size} seed={args.seed}: {len(sampled_steps)} samples saved")
