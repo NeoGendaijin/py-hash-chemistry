@@ -59,8 +59,13 @@ def initialize_state(key: Array, params: SCHCParams) -> SCHCState:
     return SCHCState(config=config, rng=key, time=0)
 
 
-def _connected_component(occupied: Array, start: Array) -> Array:
-    """8-neighborhood flood fill starting from start."""
+def _connected_component(occupied: Array, start: Array, periodic: bool = False) -> Array:
+    """8-neighborhood flood fill starting from start.
+
+    periodic=False: open boundaries (reduce_window with zero padding, no wrap).
+    periodic=True : toroidal neighborhood via wrapping rolls, so a component
+                    spanning the grid seam is recognized as a single component.
+    """
 
     start_mask = jnp.zeros_like(occupied, dtype=bool).at[start[0], start[1]].set(True)
 
@@ -70,14 +75,20 @@ def _connected_component(occupied: Array, start: Array) -> Array:
 
     def body(carry):
         comp, frontier = carry
-        neighbors = lax.reduce_window(
-            frontier.astype(jnp.uint8),
-            jnp.array(0, dtype=jnp.uint8),
-            lax.max,
-            window_dimensions=(3, 3),
-            window_strides=(1, 1),
-            padding="SAME",
-        ).astype(bool)
+        if periodic:
+            neighbors = jnp.zeros_like(frontier)
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    neighbors = neighbors | jnp.roll(jnp.roll(frontier, dx, axis=0), dy, axis=1)
+        else:
+            neighbors = lax.reduce_window(
+                frontier.astype(jnp.uint8),
+                jnp.array(0, dtype=jnp.uint8),
+                lax.max,
+                window_dimensions=(3, 3),
+                window_strides=(1, 1),
+                padding="SAME",
+            ).astype(bool)
         new = neighbors & occupied & ~comp
         comp = comp | new
         return comp, new
@@ -234,8 +245,8 @@ def _update_once(state: SCHCState, params: SCHCParams) -> Tuple[SCHCState, Array
         start1 = active_indices[idx1]
         start2 = active_indices[idx2]
 
-        comp1 = _connected_component(occupied, start1)
-        comp2 = _connected_component(occupied, start2)
+        comp1 = _connected_component(occupied, start1, params.periodic)
+        comp2 = _connected_component(occupied, start2, params.periodic)
         r1 = _bounding_box(comp1)
         r2 = _bounding_box(comp2)
 
