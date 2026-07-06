@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """Build the two SCHC case-study figures for the npj Complexity review.
 
-All panels are redrawn from the raw per-seed CSVs and saved config arrays
-(no image reuse). Two of the panels are new encodings not present in the
-conference paper: the (L, mu)/(L, p_death) runaway phase diagrams and the
-nucleation-kinetics curves.
+Seaborn-styled, publication-grade. All panels are redrawn from the raw
+per-seed CSVs and saved config arrays (no image reuse). Two panels are new
+encodings not present in the conference paper: the (L, mu)/(L, p_death)
+runaway phase diagrams and the nucleation-kinetics curves.
 
-Figure 2  (fig_schc_phenomenon): the scale-controlled transition
-  (a) L=200 snapshots (compact)   (b) L=400 snapshots (runaway)
-  (c) final mean size vs L        (d) runaway fraction vs L
-  (e) long-run novelty: cumulative pattern types rise while size saturates
+DATA is never modified here -- only presentation/encoding.
 
-Figure 3  (fig_schc_mechanism): stochastic onset and mechanism
-  (a) boundary control (open vs periodic)   (b) size-score correlation vs L
-  (c) phase diagram (L x mu)                (d) phase diagram (L x p_death)
-  (e) nucleation kinetics: fraction of runs nucleated vs time, by L
+Figure 2  fig_schc_phenomenon : the scale-controlled transition
+Figure 3  fig_schc_mechanism  : stochastic onset and mechanism
 """
 from __future__ import annotations
 import sys
@@ -26,35 +21,39 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.colors import hsv_to_rgb
+from matplotlib.lines import Line2D
+import seaborn as sns
 from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---------------- seaborn theme ----------------
+sns.set_theme(context="paper", style="ticks", font="DejaVu Sans")
 plt.rcParams.update({
-    "font.family": "sans-serif", "font.sans-serif": ["DejaVu Sans"],
-    "font.size": 8, "axes.labelsize": 8, "axes.titlesize": 8,
-    "xtick.labelsize": 7, "ytick.labelsize": 7, "legend.fontsize": 7,
-    "axes.linewidth": 0.8, "figure.dpi": 300,
+    "font.size": 8, "axes.labelsize": 8.5, "axes.titlesize": 8.5,
+    "xtick.labelsize": 7.5, "ytick.labelsize": 7.5, "legend.fontsize": 7,
+    "axes.linewidth": 0.8, "xtick.major.width": 0.8, "ytick.major.width": 0.8,
+    "xtick.major.size": 3, "ytick.major.size": 3,
+    "axes.edgecolor": "#3a3a3a", "axes.labelcolor": "#1a1a1a",
+    "text.color": "#1a1a1a", "figure.dpi": 300, "savefig.dpi": 300,
 })
+PAL = sns.color_palette("deep")
+C_OPEN, C_PERI, C_MED = PAL[0], PAL[3], "#2b2b2b"   # blue, red, near-black
+BAND = "#e9e6ef"                                     # transition-window shade
 MM = 1 / 25.4
 DOUBLE_COL = 180 * MM
-C_OPEN = "#0072B2"
-C_PERI = "#D55E00"
-C_MED = "#222222"
 GOLDEN = 0.618033988749895
 RUN = 100.0
-SNAP_STEPS = (6000, 10000, 20000)
 
 OPEN = ROOT / "results" / "transition_scan"
 FINE = ROOT / "results" / "fine_transition_scan"
 PERI = ROOT / "results" / "boundary_control" / "periodic_v2"
 LARGE = ROOT / "results" / "large_space"
-SNAP = ROOT / "results" / "snapshots_hero"
 
 
-# ---------- helpers ----------
+# ---------------- helpers ----------------
 def render(cfg):
     L = cfg.shape[0]
     img = np.ones((L, L, 3), np.float32)
@@ -62,12 +61,12 @@ def render(cfg):
     if occ.any():
         types = cfg[occ].astype(np.float64)
         hues = (types * GOLDEN) % 1.0
-        img[occ] = hsv_to_rgb(np.stack([hues, np.full_like(hues, 0.8),
-                                        np.full_like(hues, 0.85)], -1))
+        img[occ] = hsv_to_rgb(np.stack([hues, np.full_like(hues, 0.62),
+                                        np.full_like(hues, 0.92)], -1))
         lab, n = ndimage.label(occ, structure=np.ones((3, 3)))
         if n:
             big = lab == int(np.argmax(ndimage.sum(occ, lab, range(1, n + 1)))) + 1
-            img[big & ~ndimage.binary_erosion(big, structure=np.ones((3, 3)))] = 0.0
+            img[big & ~ndimage.binary_erosion(big, structure=np.ones((3, 3)))] = 0.08
     return img
 
 
@@ -102,33 +101,38 @@ def load_cfg(L, seed, step):
     return np.load(p) if p.exists() else None
 
 
-def plabel(ax, s, dx=-0.16, dy=1.04):
-    ax.text(dx, dy, s, transform=ax.transAxes, fontsize=10,
-            fontweight="bold", va="bottom", ha="right")
+def plabel(ax, s, dx=-0.20, dy=1.03):
+    ax.text(dx, dy, s, transform=ax.transAxes, fontsize=10.5,
+            fontweight="bold", va="bottom", ha="right", color="#1a1a1a")
+
+
+def snap_axis(ax, title, accent=None):
+    ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+    for k, sp in ax.spines.items():
+        sp.set_visible(True)
+        sp.set_linewidth(1.1 if accent else 0.6)
+        sp.set_color(accent if accent else "#b8b8b8")
+    ax.set_title(title, fontsize=7, pad=2.5, color="#1a1a1a")
 
 
 # ======================= FIGURE 2: phenomenon =======================
 def figure_phenomenon():
-    # Per-row snapshot specs: ("full", step) or ("zoom", step, (x0,x1,y0,y1)).
-    # L=200 stays compact (t=2000 has only ~5 active cells, so we show the
-    # populated t=5000/10000 plus a zoom that reveals the small structures);
-    # L=400 shows the runaway progression clusters -> spreading -> fill.
     row_specs = [
         (200, 0, "(a)", "compact", [("full", 5000), ("full", 10000),
                                     ("zoom", 10000, (70, 130, 70, 130))]),
         (400, 8, "(b)", "runaway", [("full", 2000), ("full", 5000), ("full", 10000)]),
     ]
-
     coarse = {L: finals(OPEN, L) for L in range(200, 401, 20)}
     coarse = {L: v for L, v in coarse.items() if v is not None}
     fine = {L: finals(FINE, L) for L in range(300, 321, 2)}
     fine = {L: v for L, v in fine.items() if v is not None}
 
-    fig = plt.figure(figsize=(DOUBLE_COL, DOUBLE_COL * 0.92))
-    gs = gridspec.GridSpec(3, 3, figure=fig, height_ratios=[1.0, 1.0, 1.15],
-                           hspace=0.5, wspace=0.42,
-                           left=0.075, right=0.945, top=0.95, bottom=0.085)
+    fig = plt.figure(figsize=(DOUBLE_COL, DOUBLE_COL * 0.94))
+    gs = gridspec.GridSpec(3, 3, figure=fig, height_ratios=[1.0, 1.0, 1.18],
+                           hspace=0.52, wspace=0.46,
+                           left=0.075, right=0.945, top=0.95, bottom=0.088)
 
+    # (a,b) snapshots
     for row, (L, seed, lab, tag, spec) in enumerate(row_specs):
         for col, item in enumerate(spec):
             ax = fig.add_subplot(gs[row, col])
@@ -136,81 +140,87 @@ def figure_phenomenon():
             if cfg is not None:
                 if item[0] == "zoom":
                     x0, x1, y0, y1 = item[2]
-                    crop = cfg[x0:x1, y0:y1]
-                    ax.imshow(render(crop), interpolation="nearest", origin="upper")
-                    ax.set_title(f"$t={item[1]:,}$  (zoom {x1-x0}$\\times${y1-y0})",
-                                 fontsize=7, pad=2)
-                    for sp in ax.spines.values():
-                        sp.set_linewidth(0.9); sp.set_color(C_OPEN)
+                    ax.imshow(render(cfg[x0:x1, y0:y1]), interpolation="nearest", origin="upper")
+                    snap_axis(ax, f"$t={item[1]:,}$  (zoom {x1-x0}$\\times${y1-y0})", accent=C_OPEN)
                 else:
                     ax.imshow(render(cfg), interpolation="nearest", origin="upper")
-                    ax.set_title(f"$t={item[1]:,}$  (max {maxcomp(cfg):,})", fontsize=7, pad=2)
-                    for sp in ax.spines.values():
-                        sp.set_linewidth(0.6); sp.set_color("0.6")
-            ax.set_xticks([]); ax.set_yticks([])
+                    snap_axis(ax, f"$t={item[1]:,}$   max$\\,{maxcomp(cfg):,}$")
             if col == 0:
-                ax.set_ylabel(f"$L={L}$\n({tag})", fontsize=8, fontweight="bold")
-                plabel(ax, lab, dx=-0.13, dy=1.02)
+                ax.set_ylabel(f"$L={L}$\n({tag})", fontsize=8.5, fontweight="bold")
+                plabel(ax, lab, dx=-0.14, dy=1.0)
 
-    # (c) final mean size vs L
+    # (c) final mean size vs L: IQR band + median + per-run strip
     axc = fig.add_subplot(gs[2, 0])
-    axc.axvspan(300, 320, color="0.88", zorder=0)
+    axc.axvspan(300, 320, color=BAND, zorder=0)
+    cL = sorted(coarse)
+    med = np.array([np.median(coarse[L]) for L in cL])
+    q1 = np.array([np.percentile(coarse[L], 25) for L in cL])
+    q3 = np.array([np.percentile(coarse[L], 75) for L in cL])
+    axc.fill_between(cL, np.clip(q1, 1, None), np.clip(q3, 1, None),
+                     color=C_OPEN, alpha=0.18, lw=0, zorder=1)
     for L, v in coarse.items():
-        axc.scatter(np.full_like(v, L), np.clip(v, 1, None), s=6, color=C_OPEN,
-                    alpha=0.35, edgecolors="none", zorder=2)
-    axc.plot(sorted(coarse), [np.median(coarse[L]) for L in sorted(coarse)], "-",
-             color=C_MED, lw=1.3, zorder=4, label="Median")
+        x = L + np.random.RandomState(L).uniform(-2.5, 2.5, size=len(v))
+        axc.scatter(x, np.clip(v, 1, None), s=9, color=C_OPEN, alpha=0.5,
+                    edgecolors="white", linewidths=0.25, zorder=3)
     for L, v in fine.items():
-        axc.scatter(np.full_like(v, L), np.clip(v, 1, None), s=5, color=C_PERI,
-                    alpha=0.5, marker="s", edgecolors="none", zorder=3)
-    axc.scatter([], [], s=6, color=C_OPEN, label=r"Coarse $\Delta L{=}20$")
-    axc.scatter([], [], s=5, color=C_PERI, marker="s", label=r"Fine $\Delta L{=}2$")
+        x = L + np.random.RandomState(L).uniform(-0.8, 0.8, size=len(v))
+        axc.scatter(x, np.clip(v, 1, None), s=8, color=C_PERI, alpha=0.6,
+                    marker="D", edgecolors="white", linewidths=0.25, zorder=4)
+    axc.plot(cL, np.clip(med, 1, None), color=C_MED, lw=1.6, zorder=5)
     axc.set_yscale("log"); axc.set_ylim(0.8, 2e5)
     axc.set_xlabel("Space size $L$"); axc.set_ylabel("Final mean size")
-    axc.legend(loc="upper left", frameon=False, handletextpad=0.3, borderpad=0.2)
-    plabel(axc, "(c)")
+    axc.legend(handles=[
+        Line2D([], [], color=C_MED, lw=1.6, label="Median"),
+        Line2D([], [], marker="o", color=C_OPEN, lw=0, label=r"Coarse $\Delta L{=}20$"),
+        Line2D([], [], marker="D", color=C_PERI, lw=0, label=r"Fine $\Delta L{=}2$"),
+    ], loc="upper left", frameon=False, handletextpad=0.3, borderpad=0.15)
+    sns.despine(ax=axc); plabel(axc, "(c)")
 
-    # (d) runaway fraction vs L
+    # (d) runaway fraction vs L with Wilson bands
     axd = fig.add_subplot(gs[2, 1])
-    axd.axvspan(300, 320, color="0.88", zorder=0)
-    for src, color, mk, lab in [(coarse, C_OPEN, "o", "Coarse"), (fine, C_PERI, "s", "Fine")]:
+    axd.axvspan(300, 320, color=BAND, zorder=0)
+    for src, color, mk, lab in [(coarse, C_OPEN, "o", "Coarse"), (fine, C_PERI, "D", "Fine")]:
         Ls = sorted(src); fr = []; lo = []; hi = []
         for L in Ls:
             v = src[L]; k = int((v > RUN).sum()); n = len(v)
-            fr.append(k / n); a, b = wilson(k, n); lo.append(fr[-1] - a); hi.append(b - fr[-1])
-        axd.errorbar(Ls, fr, yerr=[lo, hi], fmt=mk + "-", color=color, ms=3.5,
-                     lw=1.0, capsize=1.5, elinewidth=0.7, label=lab)
+            fr.append(k / n); a, b = wilson(k, n); lo.append(a); hi.append(b)
+        axd.fill_between(Ls, lo, hi, color=color, alpha=0.15, lw=0)
+        axd.plot(Ls, fr, mk + "-", color=color, ms=4, lw=1.4, mec="white",
+                 mew=0.4, label=lab)
     axd.set_ylim(-0.05, 1.05)
     axd.set_xlabel("Space size $L$"); axd.set_ylabel("Runaway fraction")
-    axd.legend(loc="upper left", frameon=False, handletextpad=0.3, borderpad=0.2)
-    plabel(axd, "(d)")
+    axd.legend(loc="upper left", frameon=False, handletextpad=0.4, borderpad=0.15)
+    sns.despine(ax=axd); plabel(axd, "(d)")
 
-    # (e) long-run novelty: patterns rise while size saturates (L=200)
+    # (e) long-run novelty (L=200): patterns rise, size saturates
     axe = fig.add_subplot(gs[2, 2])
     files = sorted((LARGE / "L200" / "runs").glob("seed_*.csv"))[:40]
     dfs = [pd.read_csv(f)[["step", "mean_size", "cum_pattern_types"]] for f in files]
     steps = dfs[0]["step"].values
     pat = np.median(np.stack([d["cum_pattern_types"].values for d in dfs]), 0)
     sz = np.median(np.stack([d["mean_size"].values for d in dfs]), 0)
-    l1, = axe.plot(steps, pat, color=C_PERI, lw=1.4, label="Cum. pattern types")
-    axe.set_xlabel("Time (steps)"); axe.set_ylabel("Cum. pattern types", color=C_PERI)
-    axe.tick_params(axis="y", labelcolor=C_PERI)
-    axe.set_ylim(0, None)
+    l1, = axe.plot(steps, pat / 1000, color=C_PERI, lw=1.8)
+    axe.set_xlabel("Time (steps)")
+    axe.set_ylabel(r"Cum. pattern types ($10^3$)", color=C_PERI)
+    axe.tick_params(axis="y", colors=C_PERI); axe.set_ylim(0, None)
+    axe.spines["left"].set_color(C_PERI)
     ax2 = axe.twinx()
-    l2, = ax2.plot(steps, sz, color=C_OPEN, lw=1.4, label="Mean size")
-    ax2.set_ylabel("Mean size", color=C_OPEN); ax2.tick_params(axis="y", labelcolor=C_OPEN)
-    ax2.set_ylim(0, max(6, sz.max() * 1.4))
-    axe.set_title(r"$L=200$: novelty persists, size saturates", fontsize=7)
-    axe.legend(handles=[l1, l2], loc="upper left", frameon=False, fontsize=6.5)
-    plabel(axe, "(e)")
+    l2, = ax2.plot(steps, sz, color=C_OPEN, lw=1.8)
+    ax2.set_ylabel("Mean size", color=C_OPEN); ax2.tick_params(axis="y", colors=C_OPEN)
+    ax2.set_ylim(0, max(6, sz.max() * 1.5)); ax2.spines["right"].set_color(C_OPEN)
+    ax2.grid(False)
+    axe.set_title(r"$L=200$: novelty persists, size saturates", fontsize=7.5)
+    axe.legend(handles=[l1, l2], labels=["Cum. pattern types", "Mean size"],
+               loc="center left", frameon=False, fontsize=6.8)
+    sns.despine(ax=axe, right=False, top=True); plabel(axe, "(e)")
 
     out = FIG_DIR / "fig_schc_phenomenon"
-    fig.savefig(f"{out}.pdf"); fig.savefig(f"{out}.png", dpi=300)
+    fig.savefig(f"{out}.pdf"); fig.savefig(f"{out}.png")
     print(f"Saved {out}.pdf / .png")
 
 
 # ======================= FIGURE 3: mechanism =======================
-def phase_grid(root, param_col, param_vals, Ls, summ_csv):
+def phase_grid(param_col, param_vals, Ls, summ_csv):
     df = pd.read_csv(summ_csv)
     G = np.full((len(param_vals), len(Ls)), np.nan)
     for i, pv in enumerate(param_vals):
@@ -221,21 +231,29 @@ def phase_grid(root, param_col, param_vals, Ls, summ_csv):
     return G
 
 
-def draw_phase(ax, G, param_vals, Ls, plabel_txt, ptitle):
-    im = ax.imshow(np.log10(np.clip(G, 1, None)), origin="lower", aspect="auto",
-                   cmap="magma", vmin=0, vmax=5)
-    ax.set_xticks(range(len(Ls))); ax.set_xticklabels(Ls)
-    ax.set_yticks(range(len(param_vals))); ax.set_yticklabels(param_vals)
-    ax.set_xlabel("Space size $L$")
+def annot(G):
+    A = np.empty_like(G, dtype=object)
     for i in range(G.shape[0]):
         for j in range(G.shape[1]):
-            val = G[i, j]
-            if not np.isnan(val):
-                txt = f"{val:.0f}" if val < 1000 else f"{val/1000:.0f}k"
-                ax.text(j, i, txt, ha="center", va="center", fontsize=6,
-                        color="white" if np.log10(max(val, 1)) < 3.2 else "black")
-    ax.set_title(ptitle, fontsize=7.5)
-    return im
+            v = G[i, j]
+            A[i, j] = "" if np.isnan(v) else (f"{v:.0f}" if v < 1000 else f"{v/1000:.0f}k")
+    return A
+
+
+def draw_heat(ax, G, pvals, Ls, ptitle, ylabel, cbar_ax=None):
+    # rows reversed so the smallest parameter value sits at the bottom
+    Gr = G[::-1]; yl = [f"{p:g}" for p in pvals][::-1]
+    hm = sns.heatmap(np.log10(np.clip(Gr, 1, None)), ax=ax, cmap="rocket",
+                     vmin=0, vmax=5, annot=annot(Gr), fmt="", annot_kws={"size": 6.5},
+                     linewidths=1.2, linecolor="white",
+                     xticklabels=Ls, yticklabels=yl,
+                     cbar=cbar_ax is not None, cbar_ax=cbar_ax,
+                     cbar_kws={"label": r"$\log_{10}$ final mean size"})
+    ax.set_xlabel("Space size $L$"); ax.set_ylabel(ylabel)
+    ax.set_title(ptitle, fontsize=8)
+    ax.tick_params(left=False, bottom=False)
+    plt.setp(ax.get_yticklabels(), rotation=0)
+    return hm
 
 
 def figure_mechanism():
@@ -244,77 +262,80 @@ def figure_mechanism():
     bp = {L: finals(PERI, L) for L in bnd_L}
     ta = pd.read_csv(OPEN / "analysis" / "transition_analysis.csv")
 
-    fig = plt.figure(figsize=(DOUBLE_COL, DOUBLE_COL * 1.0))
-    gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[1.0, 1.0, 0.95],
-                           hspace=0.6, wspace=0.32,
-                           left=0.10, right=0.93, top=0.94, bottom=0.09)
+    fig = plt.figure(figsize=(DOUBLE_COL, DOUBLE_COL * 1.02))
+    gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[1.0, 1.05, 0.92],
+                           hspace=0.62, wspace=0.36,
+                           left=0.115, right=0.9, top=0.95, bottom=0.088)
 
     # (a) boundary control
     axa = fig.add_subplot(gs[0, 0])
     Ls = [L for L in bnd_L if bo.get(L) is not None]
-    axa.plot(Ls, [np.median(bo[L]) for L in Ls], "o-", color=C_OPEN, ms=5, lw=1.4,
-             label="Open")
+    axa.plot(Ls, [np.median(bo[L]) for L in Ls], "o-", color=C_OPEN, ms=5, lw=1.6,
+             mec="white", mew=0.5, label="Open")
     axa.plot(Ls, [np.median(bp[L]) if bp.get(L) is not None else np.nan for L in Ls],
-             "s--", color=C_PERI, ms=5, lw=1.4, label="Periodic")
-    axa.axhline(RUN, color="0.6", lw=0.7, ls=":")
+             "D--", color=C_PERI, ms=5, lw=1.6, mec="white", mew=0.5, label="Periodic")
+    axa.axhline(RUN, color="#9a9a9a", lw=0.8, ls=":")
+    axa.text(Ls[0], RUN * 1.35, "runaway", fontsize=6.2, color="#8a8a8a")
     axa.set_yscale("log"); axa.set_ylim(1, 5e3)
     axa.set_xlabel("Space size $L$"); axa.set_ylabel("Median final mean size")
-    axa.legend(loc="center right", frameon=False, title="Boundary")
-    plabel(axa, "(a)")
+    axa.legend(loc="center right", frameon=False, title="Boundary", title_fontsize=7)
+    sns.despine(ax=axa); plabel(axa, "(a)")
 
     # (b) size-score correlation
     axb = fig.add_subplot(gs[0, 1])
-    axb.axvspan(300, 320, color="0.88", zorder=0)
-    axb.axhline(0, color="0.6", lw=0.6, ls=":")
-    axb.plot(ta["L"], ta["corr_size_fitness_2k_10k"], "o-", color=C_OPEN, ms=3.5, lw=1.0)
+    axb.axvspan(300, 320, color=BAND, zorder=0)
+    axb.axhline(0, color="#9a9a9a", lw=0.7, ls=":")
+    axb.plot(ta["L"], ta["corr_size_fitness_2k_10k"], "o-", color=C_OPEN, ms=4,
+             lw=1.4, mec="white", mew=0.4)
     axb.set_ylim(-1.0, 0.5)
     axb.set_xlabel("Space size $L$"); axb.set_ylabel(r"Corr($\bar s,\bar q$)")
-    plabel(axb, "(b)")
+    sns.despine(ax=axb); plabel(axb, "(b)")
 
-    # (c,d) phase diagrams
+    # (c,d) phase diagrams with a single shared colourbar
+    L4 = [200, 300, 320, 400]
+    cax = fig.add_axes([0.915, 0.40, 0.02, 0.22])
     axc = fig.add_subplot(gs[1, 0])
-    mu_vals = [0.001, 0.002, 0.005, 0.01]; L4 = [200, 300, 320, 400]
-    Gmu = phase_grid(None, "mu", mu_vals, L4,
+    Gmu = phase_grid("mu", [0.001, 0.002, 0.005, 0.01], L4,
                      ROOT / "results/param_sensitivity_mu/sensitivity_summary_mu.csv")
-    draw_phase(axc, Gmu, mu_vals, L4, "(c)", r"Final mean size vs $(L,\mu)$")
-    axc.set_ylabel(r"Mutation rate $\mu$")
-    plabel(axc, "(c)")
+    draw_heat(axc, Gmu, [0.001, 0.002, 0.005, 0.01], L4,
+              r"Final mean size vs $(L,\mu)$", r"Mutation rate $\mu$", cbar_ax=None)
+    plabel(axc, "(c)", dx=-0.17)
 
     axd = fig.add_subplot(gs[1, 1])
-    d_vals = [0.0005, 0.001, 0.005, 0.01]
-    Gd = phase_grid(None, "death_prob", d_vals, L4,
+    Gd = phase_grid("death_prob", [0.0005, 0.001, 0.005, 0.01], L4,
                     ROOT / "results/param_sensitivity_death/sensitivity_summary_death_prob.csv")
-    im = draw_phase(axd, Gd, d_vals, L4, "(d)", r"Final mean size vs $(L,p_{\mathrm{death}})$")
-    axd.set_ylabel(r"Death prob. $p_{\mathrm{death}}$")
-    plabel(axd, "(d)")
-    cb = fig.colorbar(im, ax=[axc, axd], fraction=0.046, pad=0.02, location="right")
-    cb.set_label(r"$\log_{10}$ final mean size", fontsize=7)
+    draw_heat(axd, Gd, [0.0005, 0.001, 0.005, 0.01], L4,
+              r"Final mean size vs $(L,p_{\mathrm{death}})$",
+              r"Death prob. $p_{\mathrm{death}}$", cbar_ax=cax)
+    plabel(axd, "(d)", dx=-0.17)
 
     # (e) nucleation kinetics
     axe = fig.add_subplot(gs[2, :])
-    cmap = plt.cm.viridis
     L_nuc = [320, 340, 360, 400]
+    cols = sns.color_palette("flare", len(L_nuc))
     for idx, L in enumerate(L_nuc):
         d = OPEN / f"L{L}" / "runs"
         cross = []
-        n = 0
         for f in sorted(d.glob("seed_*.csv")):
-            df = pd.read_csv(f); n += 1
+            df = pd.read_csv(f)
             over = df[df["mean_size"] > RUN]
             cross.append(int(over["step"].iloc[0]) if len(over) else np.inf)
-        grid = np.linspace(0, 20000, 200)
+        grid = np.linspace(0, 20000, 400)
         frac = [np.mean([c <= t for c in cross]) for t in grid]
-        axe.plot(grid, frac, lw=1.5, color=cmap(idx / (len(L_nuc) - 1)), label=f"$L={L}$")
+        axe.plot(grid, frac, lw=2.0, color=cols[idx], label=f"$L={L}$", solid_capstyle="round")
     axe.set_xlabel("Time (steps)"); axe.set_ylabel("Fraction nucleated")
-    axe.set_ylim(-0.03, 1.03)
-    axe.legend(loc="upper left", frameon=False, ncol=2, title="Nucleation kinetics")
-    plabel(axe, "(e)", dx=-0.06)
+    axe.set_ylim(-0.03, 1.03); axe.set_xlim(0, 20000)
+    leg = axe.legend(loc="upper left", frameon=False, ncol=2,
+                     title="Nucleation kinetics", title_fontsize=7.5)
+    leg._legend_box.align = "left"
+    sns.despine(ax=axe); plabel(axe, "(e)", dx=-0.075)
 
     out = FIG_DIR / "fig_schc_mechanism"
-    fig.savefig(f"{out}.pdf"); fig.savefig(f"{out}.png", dpi=300)
+    fig.savefig(f"{out}.pdf"); fig.savefig(f"{out}.png")
     print(f"Saved {out}.pdf / .png")
 
 
 if __name__ == "__main__":
+    np.random.seed(0)
     figure_phenomenon()
     figure_mechanism()
