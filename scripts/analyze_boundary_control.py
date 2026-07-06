@@ -27,7 +27,9 @@ PALETTE = sns.color_palette("colorblind", 10)
 RUNAWAY_THRESHOLD = 100.0
 
 OPEN_ROOT = ROOT / "results" / "transition_scan"
-PERIODIC_ROOT = ROOT / "results" / "boundary_control" / "periodic"
+# periodic_v2 uses the periodic-aware in-sim flood-fill (full toroidal dynamics),
+# unlike the earlier "periodic" root whose component detection was not wrap-aware.
+PERIODIC_ROOT = ROOT / "results" / "boundary_control" / "periodic_v2"
 
 
 def final_mean_sizes(root: Path, L: int):
@@ -58,7 +60,7 @@ def summarize(root: Path, sizes):
 
 
 def main():
-    sizes = [200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400]
+    sizes = [200, 240, 280, 300, 320, 360]
     open_s = summarize(OPEN_ROOT, sizes)
     peri_s = summarize(PERIODIC_ROOT, sizes)
 
