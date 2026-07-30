@@ -86,6 +86,16 @@ def finals(root, L):
     return np.array(v, float) if v else None
 
 
+def finals_maxfill(root, L):
+    """Final fill fraction s_max / L^2 per seed (dominant-component footprint)."""
+    d = root / f"L{L}" / "runs"
+    if not d.is_dir():
+        return None
+    v = [float(pd.read_csv(f)["max_size"].iloc[-1]) / (L * L)
+         for f in sorted(d.glob("seed_*.csv"))]
+    return np.array(v, float) if v else None
+
+
 def wilson(k, n, z=1.96):
     if n == 0:
         return 0.0, 0.0
@@ -258,8 +268,6 @@ def draw_heat(ax, G, pvals, Ls, ptitle, ylabel, cbar_ax=None):
 
 def figure_mechanism():
     bnd_L = [200, 240, 280, 300, 320, 360]
-    bo = {L: finals(OPEN, L) for L in bnd_L}
-    bp = {L: finals(PERI, L) for L in bnd_L}
     ta = pd.read_csv(OPEN / "analysis" / "transition_analysis.csv")
 
     fig = plt.figure(figsize=(DOUBLE_COL, DOUBLE_COL * 1.02))
@@ -267,17 +275,29 @@ def figure_mechanism():
                            hspace=0.62, wspace=0.36,
                            left=0.115, right=0.9, top=0.95, bottom=0.088)
 
-    # (a) boundary control
+    # (a) boundary control: dominant-component fill fraction s_max / L^2, per seed
     axa = fig.add_subplot(gs[0, 0])
-    Ls = [L for L in bnd_L if bo.get(L) is not None]
-    axa.plot(Ls, [np.median(bo[L]) for L in Ls], "o-", color=C_OPEN, ms=5, lw=1.6,
-             mec="white", mew=0.5, label="Open")
-    axa.plot(Ls, [np.median(bp[L]) if bp.get(L) is not None else np.nan for L in Ls],
-             "D--", color=C_PERI, ms=5, lw=1.6, mec="white", mew=0.5, label="Periodic")
-    axa.axhline(RUN, color="#9a9a9a", lw=0.8, ls=":")
-    axa.text(Ls[0], RUN * 1.35, "runaway", fontsize=6.2, color="#8a8a8a")
-    axa.set_yscale("log"); axa.set_ylim(1, 5e3)
-    axa.set_xlabel("Space size $L$"); axa.set_ylabel("Median final mean size")
+    rng = np.random.default_rng(42)
+    for root, col, mk, lab, off, ls in [(OPEN, C_OPEN, "o", "Open", -5.0, "-"),
+                                        (PERI, C_PERI, "D", "Periodic", 5.0, "--")]:
+        meds = []
+        for L in bnd_L:
+            v = finals_maxfill(root, L)
+            if v is None:
+                meds.append(np.nan)
+                continue
+            xs = L + off + rng.uniform(-2.4, 2.4, size=v.size)
+            axa.scatter(xs, v, s=13, color=col, marker=mk, alpha=0.5,
+                        edgecolors="white", linewidths=0.3, zorder=3)
+            meds.append(float(np.median(v)))
+        axa.plot(bnd_L, meds, ls, color=col, lw=1.6, marker=mk, ms=4.5,
+                 mec="white", mew=0.5, label=lab, zorder=4)
+    axa.axhline(0.65, color="#9a9a9a", lw=0.8, ls=":")
+    axa.text(bnd_L[0] - 4, 0.68, r"runaway fill $\approx 0.65$",
+             fontsize=6.2, color="#8a8a8a")
+    axa.set_ylim(-0.04, 0.82)
+    axa.set_xlabel("Space size $L$")
+    axa.set_ylabel(r"Final fill fraction $s_{\max}/L^{2}$")
     axa.legend(loc="center right", frameon=False, title="Boundary", title_fontsize=7)
     sns.despine(ax=axa); plabel(axa, "(a)")
 
