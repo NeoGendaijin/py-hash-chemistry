@@ -27,7 +27,7 @@ import seaborn as sns
 # ── Paths ──────────────────────────────────────────────────────────────
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 RESULTS = os.path.join(ROOT, "results")
-FIG_DIR = os.path.join(ROOT, "tex", "Large-Hash-Chemistry", "figures")
+FIG_DIR = os.path.join(ROOT, "tex", "Large-Hash-Chemistry", "archive", "figures_unused")
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # ── Style ──────────────────────────────────────────────────────────────

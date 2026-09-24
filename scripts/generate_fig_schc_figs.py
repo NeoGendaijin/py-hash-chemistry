@@ -26,7 +26,7 @@ import seaborn as sns
 from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[1]
-FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "figures"
+FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "figures" / "ext2-scale"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------- seaborn theme ----------------

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 ROOT = Path(__file__).resolve().parents[1]
-FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "figures"
+FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "archive" / "figures_unused"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 MM = 1 / 25.4
 DOUBLE_COL = 180 * MM

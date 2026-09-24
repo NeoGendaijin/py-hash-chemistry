@@ -21,7 +21,7 @@ from matplotlib.colors import hsv_to_rgb
 import seaborn as sns
 
 ROOT = Path(__file__).resolve().parents[1]
-FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "figures"
+FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "archive" / "figures_unused"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 sns.set_theme(context="paper", style="ticks", font="DejaVu Sans")
