@@ -13,7 +13,8 @@
      "matplotlib>=3.8",
  ]
  authors = [
-     { name = "Hiroki Horiguchi" }
+     { name = "Ilya Horiguchi" },
+     { name = "Hiroki Sayama" },
  ]
 
  [project.optional-dependencies]
