@@ -20,6 +20,7 @@ Additions over `main`:
 
 Reproducing the figures and Table 2 from the released data:
 ```bash
+pip install -e ".[paper]"                    # adds pandas, scipy, seaborn
 tar -xzf npj-complexity-data.tar.gz          # at the repository root -> results/
 python scripts/transition_uncertainty.py     # Table 2 with 95% intervals
 python scripts/generate_fig_schc_figs.py     # figures -> results/figures_npj/

@@ -18,6 +18,8 @@
 
  [project.optional-dependencies]
  dev = ["ruff>=0.6.9"]
+ # scripts behind the npj Complexity figures and tables
+ paper = ["pandas>=1.5", "scipy>=1.9", "seaborn>=0.12"]
 
  [tool.setuptools.packages.find]
  where = ["src"]
