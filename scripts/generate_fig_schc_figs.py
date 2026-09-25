@@ -298,16 +298,23 @@ def figure_mechanism():
     axa.set_ylim(-0.04, 0.82)
     axa.set_xlabel("Space size $L$")
     axa.set_ylabel(r"Final fill fraction $s_{\max}/L^{2}$")
-    axa.legend(loc="center right", frameon=False, title="Boundary", title_fontsize=7)
+    axa.legend(loc="center left", frameon=False, title="Boundary", title_fontsize=7)
     sns.despine(ax=axa); plabel(axa, "(a)")
 
     # (b) size-score correlation
     axb = fig.add_subplot(gs[0, 1])
     axb.axvspan(300, 320, color=BAND, zorder=0)
     axb.axhline(0, color="#9a9a9a", lw=0.7, ls=":")
+    # 95% percentile-bootstrap intervals over runs (scripts/transition_uncertainty.py)
+    unc = pd.read_csv(ROOT / "results" / "statistical_analysis" / "transition_uncertainty.csv")
+    unc = unc.set_index("L").loc[ta["L"]]
+    axb.errorbar(ta["L"], ta["corr_size_fitness_2k_10k"],
+                 yerr=[ta["corr_size_fitness_2k_10k"].to_numpy() - unc["r_lo"].to_numpy(),
+                       unc["r_hi"].to_numpy() - ta["corr_size_fitness_2k_10k"].to_numpy()],
+                 fmt="none", ecolor=C_OPEN, alpha=0.45, elinewidth=1.0, capsize=2, zorder=2)
     axb.plot(ta["L"], ta["corr_size_fitness_2k_10k"], "o-", color=C_OPEN, ms=4,
-             lw=1.4, mec="white", mew=0.4)
-    axb.set_ylim(-1.0, 0.5)
+             lw=1.4, mec="white", mew=0.4, zorder=3)
+    axb.set_ylim(-1.0, 0.8)
     axb.set_xlabel("Space size $L$"); axb.set_ylabel(r"Corr($\bar s,\bar q$)")
     sns.despine(ax=axb); plabel(axb, "(b)")
 

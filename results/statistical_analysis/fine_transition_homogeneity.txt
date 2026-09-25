@@ -1,0 +1,2 @@
+L=302..320: pooled runaway 27/100 = 0.270 (Wilson 95% 0.193-0.364)
+permutation chi-square homogeneity test: chi2=11.21, p=0.2992
