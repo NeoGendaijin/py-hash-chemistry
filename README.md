@@ -1,5 +1,32 @@
 # Structural Cellular Hash Chemistry (Python + JAX)
 
+## npj Complexity version (this branch)
+
+This branch, `npj-complexity`, holds the code for the SCHC finite-size transition
+study ("second extension") in I. Horiguchi and H. Sayama, *Hash Chemistry:
+Minimal Models for Evolutionary Growth of Complexity*, npj Complexity.
+The exact version used in the paper is the release
+[`npj-complexity-rev1`](https://github.com/NeoGendaijin/py-hash-chemistry/releases/tag/npj-complexity-rev1),
+which also carries the data archive `npj-complexity-data.tar.gz`.
+The ALIFE 2026 paper uses branch `main` (tag `alife2026-camera-ready`).
+
+Additions over `main`:
+- periodic (toroidal) boundaries with periodic-aware component detection
+  (`SCHCParams(periodic=True)`, `--periodic` in the scan scripts);
+- a multi-GPU scan runner (`scripts/run_scan_pool.py`);
+- the scripts behind the paper's SCHC figures and table
+  (`scripts/generate_fig_schc_figs.py`, `scripts/transition_uncertainty.py`)
+  and the data packager (`scripts/package_npj_data.py`).
+
+Reproducing the figures and Table 2 from the released data:
+```bash
+tar -xzf npj-complexity-data.tar.gz          # at the repository root -> results/
+python scripts/transition_uncertainty.py     # Table 2 with 95% intervals
+python scripts/generate_fig_schc_figs.py     # figures -> results/figures_npj/
+```
+The contents and file formats of the archive are described in
+[`docs/npj_data_README.md`](docs/npj_data_README.md).
+
 ## Evolution Dynamics
 
 | L=200 (no runaway) | L=400, seed 8 (runaway growth) |
@@ -59,6 +86,6 @@ Figure mapping:
 - **Figure 6**: Cumulative unique cell types (top) and cumulative unique pattern types (bottom).
 
 ## Notes
-- Hash is an FNV-style mixer; Mathematica’s exact `Hash` is not reproduced but preserves pattern-dependent variability.
+- The score is a deterministic 32-bit XOR-multiply mixer over the translation-normalized coordinates and cell types of a component (`_component_fitness` in `src/simulation.py`); Mathematica’s exact `Hash` is not reproduced, but the score keeps its pattern-dependent, unpredictable variability.
 - Connected components use 8-neighborhood flood fill via JAX `lax.reduce_window` + `lax.while_loop`, runnable on GPU.
 - `run_steps_jit`/`advance_one_step_jit` keep loops device-side; use for long GPU runs. For stepwise inspection or callbacks, use the non-JIT variants.

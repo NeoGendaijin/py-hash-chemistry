@@ -8,10 +8,11 @@ runaway phase diagrams and the nucleation-kinetics curves.
 
 DATA is never modified here -- only presentation/encoding.
 
-Figure 2  fig_schc_phenomenon : the scale-controlled transition
-Figure 3  fig_schc_mechanism  : stochastic onset and mechanism
+fig_schc_phenomenon : the scale-controlled transition
+fig_schc_mechanism  : stochastic onset and mechanism
 """
 from __future__ import annotations
+import os
 import sys
 from pathlib import Path
 import numpy as np
@@ -26,7 +27,12 @@ import seaborn as sns
 from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[1]
-FIG_DIR = ROOT / "tex" / "Large-Hash-Chemistry" / "figures" / "ext2-scale"
+# Output: $SCHC_FIG_DIR if set; else the manuscript's figure folder when the
+# (private) tex checkout is present; else results/figures_npj for public users.
+_TEX = ROOT / "tex" / "Large-Hash-Chemistry"
+FIG_DIR = Path(os.environ.get(
+    "SCHC_FIG_DIR",
+    _TEX / "figures" / "ext2-scale" if _TEX.is_dir() else ROOT / "results" / "figures_npj"))
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------- seaborn theme ----------------

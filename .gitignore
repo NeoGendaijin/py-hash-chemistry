@@ -11,3 +11,5 @@ results/gifs/configs_*/
 #papers and reference
 tex/
 reference/
+# release artifacts (attached to GitHub releases, not committed)
+dist/
