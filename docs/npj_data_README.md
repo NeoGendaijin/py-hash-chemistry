@@ -1,82 +1,111 @@
-# Data for the SCHC finite-size transition study (npj Complexity)
+# Data for the npj Complexity revision
 
-This archive holds the processed simulation outputs behind every figure and
-table of the second extension ("Extension II": the scale-controlled transition
-in Structural Cellular Hash Chemistry) of
+This archive accompanies I. Horiguchi and H. Sayama, *Hash Chemistry models for
+evolutionary growth of complexity*. It contains the corrected simulations for
+both extensions, validation outputs and derived statistics. It replaces the
+September archive, which contained the earlier simulator and withdrawn periodic
+controls. The target code release is `npj-complexity-rev1`.
 
-> I. Horiguchi and H. Sayama, *Hash Chemistry: Minimal Models for Evolutionary
-> Growth of Complexity*, npj Complexity.
-
-It belongs to the code release tagged `npj-complexity-rev1` of
-<https://github.com/NeoGendaijin/py-hash-chemistry> (branch `npj-complexity`).
-Extract it at the root of that checkout; everything lands under `results/`:
+Extract at the root of the accompanying code checkout:
 
 ```bash
 tar -xzf npj-complexity-data.tar.gz
-sha256sum -c results/MANIFEST_npj.sha256     # optional integrity check
+sha256sum -c results/MANIFEST_npj.sha256
 ```
 
-## Contents
+The manifest covers every data file and the embedded README and provenance.
+`results/PROVENANCE_npj.json` records code commit, working-tree status,
+source SHA-256 hashes, analysis versions, seeds and an inventory. Source hashes
+identify the reproduction implementation at packaging; they do not invent an
+experiment-time commit for formerly uncommitted work.
 
-| Directory | Experiment (paper Methods) | Runs | Steps | Sampling | Used in |
-|---|---|---|---|---|---|
-| `transition_scan/L{200..400}/` | coarse size scan, open boundaries, L = 200, 220, ..., 400 | 10 per L | 20,000 | every step | Table 2, Fig. 7c–d, Fig. 8b, 8e |
-| `fine_transition_scan/L{300..320}/` | fine size scan, open boundaries, L = 300, 302, ..., 320 | 10 per L | 20,000 | every 10 steps | Fig. 7c–d, text |
-| `boundary_control/periodic_v2/L{200..360}/` | periodic (toroidal) boundaries, L = 200, 240, 280, 300, 320, 360 | 5 per L | up to 5,000 | every 10 steps | Fig. 8a |
-| `large_space/L{100,200,400}/` | long-run comparison | 100 per L | 20,000 | every step | Fig. 7e, text |
-| `param_sensitivity_mu/mu_{value}/L{L}/` | mutation-rate sweep, L = 200, 300, 320, 400 | 5 per cell | 10,000 | every step | Fig. 8c |
-| `param_sensitivity_death/death_prob_{value}/L{L}/` | death-probability sweep, L = 200, 300, 320, 400 | 5 per cell | 10,000 | every step | Fig. 8d |
-| `statistical_analysis/` | derived statistics (tests, 95% intervals) | | | | Table 2, text |
-| `gifs/configs_L200_seed0/`, `gifs/configs_L400_seed8/` | grid snapshots (`.npy`) | | | | Fig. 7a–b |
+## Main datasets
 
-The open-boundary scans use the default parameters (k = 1000, n = 10,
-mu = 0.002/0.999, p_death = 0.001). Periodic runs stop at the first sample at
-which the mean component size reaches 2,000 cells, where runaway is
-unambiguous; runs that never reach it continue to step 5,000.
+| Directory below results/ | Content | Seeds / horizon | Manuscript use |
+|---|---|---|---|
+| spatial_dyadic/intended | JAX; 60 (D,P) conditions, L=100; intended dyadic rule | 0-29 / 2,000 steps | Extension I, Figs. 5-7 |
+| spatial_dyadic/as_coded | JAX; 50 P>0 conditions; earlier Mathematica dyadic behavior | 0-29 / 2,000 | comparison and validation |
+| spatial_dyadic_snapshots/intended | four conditions, configurations at 1,500, 1,750 and 2,000 steps | 0-7 | Fig. 7 and selection audit |
+| cpu_scan_full/original_mix | C; 19 L values, no growth-based early stopping | 0-99 / 20,000 | Extension II, Table 2, Figs. 8-9 |
+| cpu_novelty/original_mix/L200 | C; every-step metrics | 0-39 / 20,000 | Fig. 8e, novelty-rate check |
+| cpu_sensitivity | C; mutation/death sweeps at six L values | 0-29 / 10,000 | Fig. 9c,d |
+| cpu_scan_40k/original_mix | C; L=240,320,400; early stop at mean size 2,000 | 0-99 / up to 40,000 | longer-horizon first passages |
+| cpu_snapshots | C; L=200 seed 0 and L=400 seed 5 at figure times | stated seeds | Fig. 8a,b |
+| cpu_scan/legacy_xor | C; earlier winner rule and XOR score | 0-99 / up to 20,000 | Fig. 8d grey comparison |
+| cpu_scan/original_mix | earlier stopped version of the corrected scan | 0-99 / up to 20,000 | prefix/determinism validation only |
+| npj_rev | per-run summaries, confidence intervals, tests and tables | derived | all revised results |
 
-## File formats
+The 19 size-scan values are 100,120,140,160,180,200,210,220,230,240,250,
+260,280,300,320,340,360,380,400.
+Corrected runs use winner_rule=original, score=mix, k=1000, n=10,
+mu=0.002/0.999 and death_prob=0.001 unless a sensitivity condition states otherwise.
+The default sensitivity rows use the conditional mu=0.002/0.999, not exactly
+0.002. The extra exact-mu=0.002 runs are included for provenance but do not
+replace the default row.
 
-**Per-run trajectories** `.../runs/seed_{s}.csv` (seed = run index), one row per
-sampled step:
+## Sampling and observables
 
-| Column | Meaning |
-|---|---|
-| `step` | simulation step (one step = contests until the elapsed time reaches 1) |
-| `max_fitness`, `mean_fitness` | maximum / mean **hash score** over all connected components (the paper's hash score; the column name is historical) |
-| `max_size`, `mean_size` | size in cells of the largest component / mean component size (8-connectivity) |
-| `cum_cell_types` | cumulative number of distinct cell types observed so far |
-| `cum_pattern_types` | cumulative number of distinct replicated patterns (translation-normalized shape plus cell types) |
+C trajectory CSVs have columns step, max_fitness, mean_fitness, max_size,
+mean_size, cum_cell_types, cum_pattern_types, n_active and n_components.
 
-**Per-size summaries** `summary.csv`: for every step, the mean and standard
-deviation over runs of each column above (`<column>_mean`, `<column>_std`).
+- Historical fitness column names denote hash scores, not realized fitness.
+- Sizes and scores are measured across current 8-connected components.
+- C cumulative pattern counts include components present at sampled times,
+  whether or not those components replicated. Counts use a 64-bit pattern
+  identifier (two mixed 32-bit hashes), up to translation.
+- In the legacy/xor C comparison the score columns are alternative mix-score
+  probes; competition still uses XOR. Only its size/runaway results are used.
+- C trajectories are sampled every ten steps, except the every-step novelty
+  dataset. Extinct runs end at extinction; analysis pads their sizes with zero.
+- The 40,000-step and legacy scans stop after mean size reaches 2,000.
+  They support first-passage statistics, not subsequent persistence claims.
+- Snapshots are integer arrays; zero is empty and positive entries are cell types.
 
-**Analyses**: `transition_scan/analysis/transition_analysis.csv` and
-`fine_transition_scan/analysis/fine_transition_analysis.csv` hold the
-per-size quantities of Table 2; `param_sensitivity_*/sensitivity_summary_*.csv`
-give the final mean size shown in the phase diagrams; `statistical_analysis/`
-contains the 95% intervals and tests reported in the text
-(`transition_uncertainty.csv`, `fine_transition_uncertainty.csv`,
-`per_size_summary.csv`).
+Extension I CSVs record winner-event statistics, including mean_rep_size,
+max_rep_size, cum_pattern_types, n_events, n_active and log_bytes_cum.
+Row t records events of step t+1; n_active is the population before those events.
+Thus the last row numbered 1999 contains the cumulative event novelty after
+2,000 steps. Its pattern count concerns replicated winners and differs from the
+population-snapshot count of Extension II. Paper scripts reproduce the
+specified success filter and also report sensitivity to exclusions.
 
-**Snapshots** `gifs/configs_L{L}_seed{s}/config_step{t}.npy`: integer arrays of
-shape L x L; 0 = empty cell, 1..k = cell type.
+All archived JAX runs retain the historical corner scatter through
+legacy_corner=True. Invalid padded writes could suppress a valid update at
+(0,0). The release's normal JAX path fixes that write; changing the full
+spatial-dyadic sweep to the new path has not been tested. The C scan has no
+corner exception. Neither dataset contains a valid periodic-boundary control.
 
-## Regenerating the figures and tables
+## Validation data
+
+The original_comparison directory holds the legacy, winner-only-corrected and
+winner-plus-mix JAX arms (100 seeds each) and the 35-comparison summary.
+The original Mathematica *Series.dat inputs are publicly available at
+https://github.com/hsayama/Structural-Cellular-Hash-Chemistry.
+Use scripts/analyze_original_comparison.py --original-dir /path/to/that/checkout
+to repeat those reference comparisons.
+
+transition_fixed, transition_fixed_check, cpu_scan_check, cpu_scan_L100 and
+large_space/L200,L400 contain the JAX/C distribution-comparison trajectories.
+JAX and C seed numbers are not aligned across engines.
+
+The privately supplied per-run spatial-dyadic Mathematica CSV is not included.
+It is available from H. Sayama on reasonable request. Its derived comparison
+statistics are in spatial_dyadic/stats. If that private CSV is absent,
+npj_rev_ext1.py still regenerates every main Extension I figure and all JAX
+statistics, and skips the optional Mathematica regression.
+No correspondence or private attachment is included.
+
+## Reproduction
 
 ```bash
-python scripts/transition_uncertainty.py    # Table 2 with 95% intervals
-python scripts/generate_fig_schc_figs.py    # Figs. 7 and 8
+python scripts/npj_rev_ext1.py
+python scripts/npj_rev_ext2_tables.py
+python scripts/npj_rev_ext2_figs.py --no-provisional
+python scripts/npj_revision_schematics.py
+python scripts/npj_revision_supplement.py
+JAX_PLATFORMS=cpu python scripts/validate_model_rules.py
+python scripts/validate_cpu_engine.py
 ```
 
-Figures are written to `results/figures_npj/` (or to `$SCHC_FIG_DIR` if set).
-The raw simulations can be rerun with `scripts/run_transition_scan.sh`,
-`scripts/run_fine_transition_scan.sh`, `scripts/run_large_space.sh`,
-`scripts/param_sensitivity.py`, and, for the periodic control,
-
-```bash
-python scripts/run_scan_pool.py --periodic --sizes 200 240 280 300 320 360 \
-    --seeds 0-4 --steps 5000 --stop-mean-size 2000 \
-    --output-root results/boundary_control/periodic_v2
-```
-
-(GPU recommended; see each script's `--help`).
+Output: results/npj_rev/ext1, ext2_tables, ext2fig, schematics and supplement.
+The source scripts never overwrite manuscript TeX or original figure assets.

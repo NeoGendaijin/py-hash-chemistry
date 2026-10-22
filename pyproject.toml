@@ -22,5 +22,9 @@
  # scripts behind the npj Complexity figures and tables
  paper = ["pandas>=1.5", "scipy>=1.9", "seaborn>=0.12"]
 
- [tool.setuptools.packages.find]
- where = ["src"]
+ [tool.setuptools]
+ packages = ["hash_chemistry"]
+ package-dir = { hash_chemistry = "src" }
+
+ [tool.setuptools.package-data]
+ hash_chemistry = ["schc_fast.c"]

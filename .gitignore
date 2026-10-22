@@ -11,5 +11,15 @@ results/gifs/configs_*/
 #papers and reference
 tex/
 reference/
+report/
 # release artifacts (attached to GitHub releases, not committed)
 dist/
+src/_schc_fast*.so
+build/
+*.egg-info/
+results/cpu_*/
+results/npj_rev/
+results/original_comparison/
+results/spatial_dyadic*/
+results/transition_fixed*/
+results/quench_check*/
