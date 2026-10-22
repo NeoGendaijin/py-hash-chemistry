@@ -1192,23 +1192,28 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
             fm = "{:.0f}" if m == "C" else "{:.2f}"
             cells.append(f"{fm.format(v[0] / sc)} [{fm.format(v[1] / sc)}, {fm.format(v[2] / sc)}]")
         w(f"| {P:.1f} | " + " | ".join(cells) + " |")
-    ref = pd.read_csv(SD_ROOT / "sayama_lba_fig1.csv")
-    ref["P"] = ref.P.round(1)
-    w("\nPublished values (Mathematica, swap typo; `results/spatial_dyadic/sayama_lba_fig1.csv`) vs intended rule, "
-      "mean over D:\n")
-    w("| P | A Mathematica | A intended | B Mathematica | B intended | C Mathematica | C intended |")
-    w("|---|---|---|---|---|---|---|")
-    for P in P_VALUES:
-        m = ref[ref.P == P]
-        w(f"| {P:.1f} | {m.successful_runs.mean():.1f} | {pooled(tab, boots, 'intended', 'P', P, 'A')[0]:.1f} | "
-          f"{m.mean_rep_size_final500.mean():.2f} | {pooled(tab, boots, 'intended', 'P', P, 'B')[0]:.2f} | "
-          f"{m.cum_pattern_types_final.mean():.0f} | {pooled(tab, boots, 'intended', 'P', P, 'C')[0]:.0f} |")
-    mo = ref[(ref.D == 100) & (ref.P == 0.0)].iloc[0]
-    w(f"\nOriginal (100, 0): Mathematica A = {mo.successful_runs:.0f}, B = {mo.mean_rep_size_final500:.2f}, "
-      f"C = {mo.cum_pattern_types_final:.0f}; intended (JAX) A = {o.A:.0f}, B = {o.B:.2f}, C = {o.C:.0f}. "
-      f"Mathematica maxima: B at {ck(ref.loc[ref.mean_rep_size_final500.idxmax(), ['D', 'P']])}, C at "
-      f"{ck(ref.loc[ref.cum_pattern_types_final.idxmax(), ['D', 'P']])}; intended: B at {ck(ti.B.idxmax())}, "
-      f"C at {ck(ti.C.idxmax())}.")
+    reference_path = SD_ROOT / "sayama_lba_fig1.csv"
+    if reference_path.exists():
+        ref = pd.read_csv(reference_path)
+        ref["P"] = ref.P.round(1)
+        w("\nPublished values (Mathematica, swap typo; `results/spatial_dyadic/sayama_lba_fig1.csv`) vs intended rule, "
+          "mean over D:\n")
+        w("| P | A Mathematica | A intended | B Mathematica | B intended | C Mathematica | C intended |")
+        w("|---|---|---|---|---|---|---|")
+        for P in P_VALUES:
+            m = ref[ref.P == P]
+            w(f"| {P:.1f} | {m.successful_runs.mean():.1f} | {pooled(tab, boots, 'intended', 'P', P, 'A')[0]:.1f} | "
+              f"{m.mean_rep_size_final500.mean():.2f} | {pooled(tab, boots, 'intended', 'P', P, 'B')[0]:.2f} | "
+              f"{m.cum_pattern_types_final.mean():.0f} | {pooled(tab, boots, 'intended', 'P', P, 'C')[0]:.0f} |")
+        mo = ref[(ref.D == 100) & (ref.P == 0.0)].iloc[0]
+        w(f"\nOriginal (100, 0): Mathematica A = {mo.successful_runs:.0f}, B = {mo.mean_rep_size_final500:.2f}, "
+          f"C = {mo.cum_pattern_types_final:.0f}; intended (JAX) A = {o.A:.0f}, B = {o.B:.2f}, C = {o.C:.0f}. "
+          f"Mathematica maxima: B at {ck(ref.loc[ref.mean_rep_size_final500.idxmax(), ['D', 'P']])}, C at "
+          f"{ck(ref.loc[ref.cum_pattern_types_final.idxmax(), ['D', 'P']])}; intended: B at {ck(ti.B.idxmax())}, "
+          f"C at {ck(ti.C.idxmax())}.")
+    else:
+        w("\nThe optional published-Mathematica figure summary is not present. Its reference comparison "
+          "is omitted here; all intended-rule measurements and main figures are generated from the archived JAX runs.")
     w("\nMean over P (95% interval as above), intended rule:\n")
     w("| D | A | B | C |")
     w("|---|---|---|---|")
