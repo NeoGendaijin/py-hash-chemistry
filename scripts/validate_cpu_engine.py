@@ -22,6 +22,8 @@ from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
 PAIRS = [
+    ("current corner-corrected original/mix L=100", ROOT / "results/cpu_scan_check/original_mix/L100/runs",
+     ROOT / "results/corner_fixed/transition_fixed_check/L100/runs", 100),
     ("legacy/xor L=200", ROOT / "results/cpu_scan/legacy_xor/L200/runs", ROOT / "results/large_space/L200/runs", 200),
     ("legacy/xor L=400", ROOT / "results/cpu_scan/legacy_xor/L400/runs", ROOT / "results/large_space/L400/runs", 400),
     ("original/mix L=200", ROOT / "results/cpu_scan/original_mix/L200/runs", ROOT / "results/transition_fixed/L200/runs", 200),
@@ -45,7 +47,9 @@ def summarize(run_dir: Path, L: int):
 
 
 def main():
-    lines = ["# CPU engine vs JAX: distributional validation\n"]
+    lines = ["# CPU engine vs JAX: distributional validation\n",
+             "The current comparison uses corner-corrected JAX. The remaining comparisons below use archived JAX runs "
+             "with the historical corner behavior and are retained as historical checks, not new corrected runs.\n"]
     for name, cpu_dir, jax_dir, L in PAIRS:
         if not cpu_dir.exists() or not jax_dir.exists():
             lines.append(f"## {name}: missing data\n")

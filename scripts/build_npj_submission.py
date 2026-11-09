@@ -73,7 +73,7 @@ def sync_figures():
              (ROOT / "results/npj_rev/schematics/outline-original.svg",
               PAPER / "figures/family/rev1/outline-original.svg")]
     for name in ("P-D-final-num-runs.pdf", "P-D-final-size.pdf", "P-D-final-nctypes.pdf",
-                 "P-D-overall-performance.pdf", "fig6_pairs.pdf"):
+                 "fig5_heatmaps.pdf", "fig6_pairs.pdf"):
         pairs.append((ROOT / "results/npj_rev/ext1" / name, PAPER / "figures/ext1-dyadic/rev1" / name))
     for p in (ROOT / "results/npj_rev/ext1").glob("snap_*.png"):
         pairs.append((p, PAPER / "figures/ext1-dyadic/rev1" / p.name))

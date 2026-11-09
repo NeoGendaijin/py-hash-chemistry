@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from src import fast
 from src.simulation import (SCHCParams, _component_hash,
-                            _connected_component, _dyadic_winner, _rewrite)
+                            SCHCState, _connected_component, _contest, _dyadic_winner, _mutate, _rewrite,
+                            advance_one_step, advance_one_step_logged, initialize_state)
 
 
 def numpy_contest(grid, start1, start2, coin, rule, score):
@@ -115,6 +116,44 @@ class ModelRules(unittest.TestCase):
             forward = int(_dyadic_winner(g, first, second, "intended"))
             backward = int(_dyadic_winner(g, second, first, "intended"))
             self.assertEqual(forward, 1 - backward)
+
+    def test_jax_contests_never_replace_the_stronger_pattern_with_the_weaker(self):
+        grid = np.zeros((10, 10), np.int32)
+        grid[2, 2], grid[7, 7] = 17, 731
+        masks = [jnp.zeros_like(jnp.array(grid), dtype=bool).at[x, x].set(True) for x in (2, 7)]
+        hashes = [int(_component_hash(jnp.array(grid), mask, "mix")) for mask in masks]
+        x = (2, 7)[int(hashes[1] > hashes[0])]
+        params = SCHCParams(L=10, mu=0, death_prob=0)
+        def contest(key):
+            state, _, _ = _contest(SCHCState(jnp.array(grid), key, jnp.int32(0)), params)
+            return state.config
+        configs = np.asarray(jax.jit(jax.vmap(contest))(random.split(random.PRNGKey(23), 256)))
+        self.assertTrue(np.all(configs[:, x, x] == grid[x, x]))
+        self.assertTrue(np.any(configs != grid))
+
+    def test_mutation_includes_empty_cells_and_death_has_priority(self):
+        values = jnp.array([0, 3, 7], dtype=jnp.int32)
+        for death, mu in ((0, 0), (1, 1), (0, 1)):
+            result, _ = _mutate(values, random.PRNGKey(0), SCHCParams(mu=mu, death_prob=death))
+            if death:
+                np.testing.assert_array_equal(result, np.zeros(3))
+            elif not mu:
+                np.testing.assert_array_equal(result, values)
+            else:
+                self.assertTrue(np.all((np.asarray(result) >= 1) & (np.asarray(result) <= 1000)))
+
+    def test_event_logging_does_not_change_dynamics(self):
+        params = SCHCParams(L=10)
+        plain = initialize_state(random.PRNGKey(23), params)
+        logged = plain
+        seen = jnp.zeros(params.k + 1, dtype=bool)
+        plain_step = jax.jit(lambda state: advance_one_step(state, params))
+        logged_step = jax.jit(lambda state, seen: advance_one_step_logged(state, params, seen, 101))
+        for _ in range(4):
+            plain = plain_step(plain)
+            logged, seen, _ = logged_step(logged, seen)
+            np.testing.assert_array_equal(plain.config, logged.config)
+            np.testing.assert_array_equal(plain.rng, logged.rng)
 
     def test_cpu_replays_archived_prefix(self):
         path = ROOT / "results/cpu_scan_full/original_mix/L100/runs/seed_0.csv"

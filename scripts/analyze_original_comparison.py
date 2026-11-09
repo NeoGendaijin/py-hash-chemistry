@@ -85,7 +85,7 @@ def window_values(x: np.ndarray, kind: str, lo: int, hi: int) -> np.ndarray:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--original-dir", default=str(ROOT.parent / "Structural-Cellular-Hash-Chemistry"))
-    ap.add_argument("--runs-root", default=str(ROOT / "results" / "original_comparison"))
+    ap.add_argument("--runs-root", default=str(ROOT / "results/corner_fixed/original_comparison"))
     ap.add_argument("--out-dir", default=None)
     ap.add_argument("--n-boot", type=int, default=2000)
     args = ap.parse_args()

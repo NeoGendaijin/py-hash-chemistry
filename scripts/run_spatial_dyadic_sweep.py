@@ -31,6 +31,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.compare_original_schc import HEADER, run_batch
 from src.simulation import SCHCParams
+from scripts.run_provenance import FIXED_ROOT, register_run
 
 D_VALUES = list(range(10, 101, 10))
 P_VALUES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
@@ -52,7 +53,8 @@ def main():
     ap.add_argument("--seeds", type=int, default=30)
     ap.add_argument("--steps", type=int, default=2000)
     ap.add_argument("--part", default="0/1", help="i/n: run every n-th condition starting at i")
-    ap.add_argument("--output-root", default=str(ROOT / "results" / "spatial_dyadic"))
+    ap.add_argument("--output-root", default=str(FIXED_ROOT / "spatial_dyadic"))
+    ap.add_argument("--legacy-corner", action="store_true", help="reproduce the archived corner-write bug")
     args = ap.parse_args()
 
     i, n = map(int, args.part.split("/"))
@@ -62,11 +64,12 @@ def main():
     print(f"rules={args.dyadic_rules} part={args.part}: {len(todo)} conditions", flush=True)
     for rule, d, p in todo:
         out_dir = Path(args.output_root) / rule / f"D{d}_P{p:.1f}"
+        params = SCHCParams(L=100, winner_rule="original", score="mix", legacy_corner=args.legacy_corner,
+                            D=d, P=p, dyadic_rule=rule)
+        register_run(out_dir, params, seeds, args.steps)
         if all((out_dir / f"seed_{s}.csv").exists() for s in seeds):
             print(f"skip {rule} D={d} P={p}", flush=True)
             continue
-        params = SCHCParams(L=100, winner_rule="original", score="mix", legacy_corner=True,
-                            D=d, P=p, dyadic_rule=rule)
         t0 = time.time()
         rows = run_batch(params, seeds, args.steps)
         out_dir.mkdir(parents=True, exist_ok=True)

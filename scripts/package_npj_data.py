@@ -2,7 +2,8 @@
 """Package corrected revision data with an inventory and reproducible checksums.
 
 Excludes superseded transition/periodic data, shared email attachments, compiled
-libraries and correspondence. Main figures need no private inputs.
+libraries, correspondence and working Markdown reports. Main figures need no
+private inputs; the public data README is included explicitly.
 """
 from __future__ import annotations
 
@@ -23,6 +24,9 @@ NAME = "npj-complexity-data.tar.gz"
 FIXED_MTIME = 1_780_000_000
 SIZES = [100, 120, 140, 160, 180, 200, 210, 220, 230, 240, 250,
          260, 280, 300, 320, 340, 360, 380, 400]
+JOBS = ("sweep_part_0", "sweep_part_1", "sweep_part_2", "original_legacy", "original_fixed",
+        "original_fixed_mix", "snapshots", "validation_L100")
+WITHDRAWN_OUTPUTS = {"npj_rev/ext1/contrasts_original_vs_best.csv"}
 TREES = {
     "cpu_scan_full/original_mix": ("*.csv",),
     "cpu_scan/legacy_xor": ("*.csv",),
@@ -33,14 +37,19 @@ TREES = {
     "cpu_snapshots": ("*.csv", "*.npy"),
     "spatial_dyadic/intended": ("*.csv",),
     "spatial_dyadic/as_coded": ("*.csv",),
-    "spatial_dyadic/stats": ("*.csv", "*.md"),
+    "spatial_dyadic/stats": ("*.csv",),
     "spatial_dyadic_snapshots/intended": ("*.npy",),
-    "original_comparison": ("*.csv", "*.md"),
+    "original_comparison": ("*.csv",),
+    "corner_fixed/spatial_dyadic": ("*.csv", "*.json"),
+    "corner_fixed/spatial_dyadic_snapshots": ("*.npy", "*.json"),
+    "corner_fixed/original_comparison": ("*.csv", "*.json"),
+    "corner_fixed/transition_fixed_check": ("*.csv", "*.json"),
+    "corner_fixed/source_snapshot": ("*.py",),
     "transition_fixed": ("*.csv",),
     "transition_fixed_check": ("*.csv",),
     "cpu_scan_check": ("*.csv",),
     "cpu_scan_L100": ("*.csv",),
-    "npj_rev": ("*.csv", "*.md", "*.tex", "*.json"),
+    "npj_rev": ("*.csv", "*.tex", "*.json"),
     "large_space/L200": ("*.csv",),
     "large_space/L400": ("*.csv",),
 }
@@ -55,6 +64,10 @@ def sha256(path: Path) -> str:
 
 
 def check_required_runs():
+    for job in JOBS:
+        record = RES / f"corner_fixed/{job}.completion.json"
+        if not record.exists() or json.loads(record.read_text())["returncode"] != 0:
+            raise ValueError(f"unfinished corrected calculation: {job}")
     missing = []
     for size in SIZES:
         for seed in range(100):
@@ -67,7 +80,7 @@ def check_required_runs():
                 if rule == "as_coded" and pi == 0:
                     continue
                 for seed in range(30):
-                    p = RES / f"spatial_dyadic/{rule}/D{d}_P{pi / 5:.1f}/seed_{seed}.csv"
+                    p = RES / f"corner_fixed/spatial_dyadic/{rule}/D{d}_P{pi / 5:.1f}/seed_{seed}.csv"
                     if not p.exists():
                         missing.append(p)
     if missing:
@@ -82,10 +95,13 @@ def collect() -> list[Path]:
         if not directory.is_dir():
             raise FileNotFoundError(directory)
         found = {p for pat in patterns for p in directory.rglob(pat)
-                 if ".partial." not in p.name}
+                 if ".partial." not in p.name and p.relative_to(RES).as_posix() not in WITHDRAWN_OUTPUTS}
         if not found:
             raise FileNotFoundError(f"no matching data under {directory}")
         files.update(found)
+    files.update(RES / f"corner_fixed/{job}.completion.json" for job in JOBS)
+    files.update(RES / f"corner_fixed/{name}" for name in ("thermal.csv", "adaptive_validation.json"))
+    assert all(p.is_file() for p in files)
     return sorted(files, key=lambda p: p.relative_to(ROOT).as_posix())
 
 
@@ -119,7 +135,8 @@ def provenance(files: list[Path]) -> bytes:
         "extension_I": {
             "engine": "JAX", "L": 100, "seeds": "0-29", "steps": 2000,
             "D": list(range(10, 101, 10)), "P": [i / 5 for i in range(6)],
-            "winner_rule": "original", "score": "mix", "legacy_corner": True,
+            "winner_rule": "original", "score": "mix", "legacy_corner": False,
+            "directory": "corner_fixed/spatial_dyadic",
             "row_time": "row t records events of step t+1; n_active is measured before that step",
         },
         "extension_II": {

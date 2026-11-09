@@ -36,6 +36,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.simulation import SCHCParams, advance_one_step_logged, initialize_state
+from scripts.run_provenance import FIXED_ROOT, register_run
 
 ARMS = {
     "legacy": dict(winner_rule="legacy", score="xor"),      # published JAX model
@@ -47,7 +48,7 @@ HEADER = ("step,max_fitness,mean_fitness,max_fitness_gap,mean_fitness_gap,num_re
           "max_rep_size,mean_rep_size,cum_cell_types,cum_pattern_types,n_events,n_active,log_bytes_cum")
 
 
-def run_batch(params: SCHCParams, seeds, steps: int):
+def run_batch_reference(params: SCHCParams, seeds, steps: int):
     max_events = params.L * params.L + 1
     init = jax.jit(jax.vmap(lambda key: initialize_state(key, params)))
     step = jax.jit(jax.vmap(lambda s, seen: advance_one_step_logged(s, params, seen, max_events)))
@@ -80,6 +81,11 @@ def run_batch(params: SCHCParams, seeds, steps: int):
     return rows
 
 
+def run_batch(params: SCHCParams, seeds, steps: int):
+    from scripts.adaptive_batch import run_batch as adaptive_run
+    return adaptive_run(params, seeds, steps)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--arm", choices=sorted(ARMS), required=True)
@@ -87,7 +93,8 @@ def main():
     ap.add_argument("--batch", type=int, default=50)
     ap.add_argument("--steps", type=int, default=2000)
     ap.add_argument("--size", type=int, default=100)
-    ap.add_argument("--output-root", default=str(ROOT / "results" / "original_comparison"))
+    ap.add_argument("--output-root", default=str(FIXED_ROOT / "original_comparison"))
+    ap.add_argument("--legacy-corner", action="store_true", help="reproduce the archived corner-write bug")
     args = ap.parse_args()
 
     if "-" in args.seeds:
@@ -95,15 +102,17 @@ def main():
         seeds = list(range(lo, hi + 1))
     else:
         seeds = [int(s) for s in args.seeds.split(",")]
-    params = SCHCParams(L=args.size, legacy_corner=True, **ARMS[args.arm])
+    params = SCHCParams(L=args.size, legacy_corner=args.legacy_corner, **ARMS[args.arm])
     out_dir = Path(args.output_root) / args.arm
-    out_dir.mkdir(parents=True, exist_ok=True)
+    register_run(out_dir, params, seeds, args.steps)
     print(f"arm={args.arm} params={params} seeds={seeds[0]}..{seeds[-1]} ({len(seeds)}) "
           f"devices={jax.devices()}", flush=True)
 
     fmt = ["%d"] + ["%.10g"] * 7 + ["%d"] * 5
     for i in range(0, len(seeds), args.batch):
         batch = seeds[i:i + args.batch]
+        if all((out_dir / f"seed_{s}.csv").exists() for s in batch):
+            continue
         t0 = time.time()
         rows = run_batch(params, batch, args.steps)
         for s, r in zip(batch, rows):

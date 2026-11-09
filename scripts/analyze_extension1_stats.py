@@ -116,7 +116,7 @@ def holm(p):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sayama-csv", default=str(ROOT / "tex/Large-Hash-Chemistry/review/Sayama-addition/SD-SCHC-experimental-data.csv"))
-    ap.add_argument("--root", default=str(ROOT / "results" / "spatial_dyadic"))
+    ap.add_argument("--root", default=str(ROOT / "results/corner_fixed/spatial_dyadic"))
     args = ap.parse_args()
     root = Path(args.root)
     out = root / "stats"

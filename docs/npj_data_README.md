@@ -23,9 +23,9 @@ experiment-time commit for formerly uncommitted work.
 
 | Directory below results/ | Content | Seeds / horizon | Manuscript use |
 |---|---|---|---|
-| spatial_dyadic/intended | JAX; 60 (D,P) conditions, L=100; intended dyadic rule | 0-29 / 2,000 steps | Extension I, Figs. 5-7 |
-| spatial_dyadic/as_coded | JAX; 50 P>0 conditions; earlier Mathematica dyadic behavior | 0-29 / 2,000 | comparison and validation |
-| spatial_dyadic_snapshots/intended | four conditions, configurations at 1,500, 1,750 and 2,000 steps | 0-7 | Fig. 7 and selection audit |
+| corner_fixed/spatial_dyadic/intended | JAX; 60 (D,P) conditions, L=100; intended dyadic rule | 0-29 / 2,000 steps | Extension I, Figs. 5-7 |
+| corner_fixed/spatial_dyadic/as_coded | JAX; 50 P>0 conditions; earlier Mathematica dyadic behavior | 0-29 / 2,000 | comparison and validation |
+| corner_fixed/spatial_dyadic_snapshots/intended | four conditions, configurations at 1,500, 1,750 and 2,000 steps | 0-7 | Fig. 7 and selection audit |
 | cpu_scan_full/original_mix | C; 19 L values, no growth-based early stopping | 0-99 / 20,000 | Extension II, Table 2, Figs. 8-9 |
 | cpu_novelty/original_mix/L200 | C; every-step metrics | 0-39 / 20,000 | Fig. 8e, novelty-rate check |
 | cpu_sensitivity | C; mutation/death sweeps at six L values | 0-29 / 10,000 | Fig. 9c,d |
@@ -69,42 +69,66 @@ Thus the last row numbered 1999 contains the cumulative event novelty after
 population-snapshot count of Extension II. Paper scripts reproduce the
 specified success filter and also report sensitivity to exclusions.
 
-All archived JAX runs retain the historical corner scatter through
-legacy_corner=True. Invalid padded writes could suppress a valid update at
-(0,0). The release's normal JAX path fixes that write; changing the full
-spatial-dyadic sweep to the new path has not been tested. The C scan has no
-corner exception. Neither dataset contains a valid periodic-boundary control.
+Extension I reports successful-run counts (A), replication-event size (B) and
+cumulative replicated pattern types (C) separately. Its condition table has no
+composite score or condition ranking. Figure 5 has three heatmaps, and Figure 6
+colors pairwise relationships by the dyadic interaction probability P. The
+matched-seed supplement compares P=1 with P=0 at matched D and seed, using only
+jointly successful pairs for B/C; bootstrap_seed identifies each interval's
+fixed resampling stream.
+
+Primary JAX datasets under corner_fixed use legacy_corner=False: invalid
+scatter entries are dropped instead of competing with a valid write to (0,0).
+The older spatial_dyadic and original_comparison datasets retain the corner
+exception and are supplied only as historical comparisons. The C scan has no
+corner exception. No dataset provides a validated periodic-boundary control.
+
+Per-condition run_metadata.json files identify parameters, seeds and actual
+source hashes. Completed outputs are reused only after validating their settings,
+horizon or requested snapshots, and source identities against current or archived
+sources; an incomplete run cannot silently inherit a different implementation.
+Nine completed corrected conditions from the initial full-batch
+execution are retained with their original metadata and source_snapshot files;
+the remaining conditions use adaptive batching. All have the same corrected
+rules. GPU tests compare states, PRNGs and event records across batch splits,
+and the global baseline agrees for 30 full 2,000-step trajectories generated
+independently with batch sizes 30 and 50.
 
 ## Validation data
 
-The original_comparison directory holds the legacy, winner-only-corrected and
+The corner_fixed/original_comparison directory holds the legacy, winner-only-corrected and
 winner-plus-mix JAX arms (100 seeds each) and the 35-comparison summary.
 The original Mathematica *Series.dat inputs are publicly available at
 https://github.com/hsayama/Structural-Cellular-Hash-Chemistry.
 Use scripts/analyze_original_comparison.py --original-dir /path/to/that/checkout
 to repeat those reference comparisons.
 
-transition_fixed, transition_fixed_check, cpu_scan_check, cpu_scan_L100 and
+corner_fixed/transition_fixed_check holds the current 50-run L=100 JAX validation.
+The older transition_fixed, transition_fixed_check, cpu_scan_check, cpu_scan_L100 and
 large_space/L200,L400 contain the JAX/C distribution-comparison trajectories.
 JAX and C seed numbers are not aligned across engines.
 
 The privately supplied per-run spatial-dyadic Mathematica CSV is not included.
 It is available from H. Sayama on reasonable request. Its derived comparison
-statistics are in spatial_dyadic/stats. If that private CSV is absent,
+statistics are in corner_fixed/spatial_dyadic/stats. If that private CSV is absent,
 npj_rev_ext1.py still regenerates every main Extension I figure and all JAX
 statistics, and skips the optional Mathematica regression.
 No correspondence or private attachment is included.
+Working Markdown reports and manuscript-editing notes are also excluded from
+the public archive. The public data README, numerical summaries, tests and
+provenance remain included; analysis scripts can regenerate their working reports.
 
 ## Reproduction
 
 ```bash
-python scripts/npj_rev_ext1.py
-python scripts/npj_rev_ext2_tables.py
-python scripts/npj_rev_ext2_figs.py --no-provisional
-python scripts/npj_revision_schematics.py
-python scripts/npj_revision_supplement.py
-JAX_PLATFORMS=cpu python scripts/validate_model_rules.py
-python scripts/validate_cpu_engine.py
+uv run --no-sync python scripts/npj_rev_ext1.py
+uv run --no-sync python scripts/npj_rev_ext2_tables.py
+uv run --no-sync python scripts/npj_rev_ext2_figs.py --no-provisional
+uv run --no-sync python scripts/npj_revision_schematics.py
+uv run --no-sync python scripts/npj_revision_supplement.py
+uv run --no-sync python scripts/validate_ext1_observables.py
+JAX_PLATFORMS=cpu uv run --no-sync python scripts/validate_model_rules.py
+uv run --no-sync python scripts/validate_cpu_engine.py
 ```
 
 Output: results/npj_rev/ext1, ext2_tables, ext2fig, schematics and supplement.

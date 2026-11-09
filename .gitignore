@@ -12,6 +12,20 @@ results/gifs/configs_*/
 tex/
 reference/
 report/
+# Private revision workflow, drafts and generated working reports.
+/review/
+/internal/
+/private/
+/docs/internal/
+/docs/private/
+/docs/drafts/
+/docs/alife2026_erratum.md
+/docs/release_notes_npj.md
+/results/**/*.md
+*.internal.md
+*.private.md
+*_internal.md
+*_draft.md
 # release artifacts (attached to GitHub releases, not committed)
 dist/
 src/_schc_fast*.so
@@ -23,3 +37,4 @@ results/original_comparison/
 results/spatial_dyadic*/
 results/transition_fixed*/
 results/quench_check*/
+results/corner_fixed*/

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 npj Complexity revision -- Extension I (Sec. 3, spatial-dyadic SCHC, L=100) with the INTENDED
-dyadic rule (JAX re-run of Sayama's sweep, results/spatial_dyadic/intended; the as-coded rule is
+dyadic rule (JAX re-run of Sayama's sweep, results/corner_fixed/spatial_dyadic/intended; the as-coded rule is
 used only for comparison).
 
 Run (single process, ~1-2 min; re-runnable whenever more snapshot data arrive):
-    .venv/bin/python scripts/npj_rev_ext1.py [--n-boot 10000] [--out results/npj_rev/ext1]
+    uv run --no-sync python scripts/npj_rev_ext1.py [--n-boot 10000] [--out results/npj_rev/ext1]
 
 Definitions (Sayama's criterion; the same as scripts/analyze_spatial_dyadic.py):
   success  = 1 MB < log_bytes_cum[-1] < 300 MB, n_active[-1] > 0 and 2000 rows (t = 0..1999)
@@ -15,7 +15,6 @@ Definitions (Sayama's criterion; the same as scripts/analyze_spatial_dyadic.py):
   B = mean over the final 500 steps of the ensemble-mean (over successful runs) per-step
       mean_rep_size; per run: nanmean of the last 500 mean_rep_size values
   C = mean over successful runs of cum_pattern_types in the last CSV row (step 1999)
-  overall performance = A x B x C (Fig. 5d)
   Time convention (compare_original_schc.run_batch): CSV row t holds n_active after t steps but the
   events (replications, patterns, log bytes) of the (t+1)-th step. So row 1999 gives C after all 2000
   steps (t = 2000, end of run) and rows 1500-1999 cover steps 1501-2000 (t = 1500-2000, as the caption).
@@ -25,13 +24,12 @@ cells at the snapshot time (a grown population); among them the seed whose C is 
 condition's median C. Dominance statistics are summarised over the same candidates, per snapshot time.
 
 Outputs in --out (nothing is written into tex/):
-  (a) fig5_heatmaps.{pdf,png} + single panels P-D-final-num-runs / -size / -nctypes /
-      P-D-overall-performance .{pdf,png} (drop-in names of the manuscript's Fig. 5 files)
-  (b) fig6_3d.{pdf,png} (3-D scatter, P-D-3D-performance) and fig6_pairs.{pdf,png} (2-D alternative)
+  (a) fig5_heatmaps.{pdf,png} + single panels P-D-final-num-runs / -size / -nctypes
+  (b) fig6_3d.{pdf,png} and fig6_pairs.{pdf,png}: separate A, B, C, colored by P
   (c) fig7_snapshots.{pdf,png}, single panels snap_D*_P*_seed*_t*.png, figS_snapshots_all_seeds,
       snapshot_selection.csv, snapshot_stats.csv, snapshot_dominance_by_time.csv
   (d) per_run.csv, conditions.csv, regression.csv, joint_tests.csv, trends.csv, trends_strata.csv,
-      contrasts_original_vs_best.csv, contrasts_original_vs_all.csv, contrasts_P0_vs_P.csv,
+      contrasts_original_vs_all.csv, contrasts_P0_vs_P.csv,
       contrasts_D100_vs_D.csv, figS_trends.{pdf,png}
   (e) failures.csv, failures_by_P.csv, failures_by_D.csv, sensitivity.csv, figS_failures.{pdf,png}
   (f) summary.md: numbers for the Sec. 3 text, keyed to the sentences of sn-article-rev1.tex
@@ -59,8 +57,8 @@ from mpl_toolkits.mplot3d import proj3d
 from scipy import ndimage, stats
 
 ROOT = Path(__file__).resolve().parents[1]
-SD_ROOT = ROOT / "results" / "spatial_dyadic"
-SNAP_ROOT = ROOT / "results" / "spatial_dyadic_snapshots"
+SD_ROOT = ROOT / "results/corner_fixed/spatial_dyadic"
+SNAP_ROOT = ROOT / "results/corner_fixed/spatial_dyadic_snapshots"
 TEX = ROOT / "tex" / "Large-Hash-Chemistry" / "sn-article-rev1.tex"  # read only
 D_VALUES = list(range(10, 101, 10))
 P_VALUES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
@@ -183,7 +181,7 @@ def cliffs_delta(x, y):
 
 
 def condition_table(runs, curves, n_boot, rng):
-    """Per-condition A, B, C, A*B*C with Wilson / bootstrap 95% intervals; bootstrap replicates kept."""
+    """Separate A, B and C with Wilson / bootstrap 95% intervals; replicates kept."""
     rows, boots = [], {}
     for (rule, D, P), g in runs.groupby(["rule", "D", "P"], sort=True):
         n = len(g)
@@ -202,15 +200,10 @@ def condition_table(runs, curves, n_boot, rng):
         else:
             Bm = Cm = np.nan
             Bb = Cb = logC_b = np.full(n_boot, np.nan)
-        # unconditional bootstrap over all runs of the condition (A and A*B*C)
+        # Retain A's unconditional bootstrap stream so B/C intervals stay reproducible.
         idx = rng.integers(0, n, (n_boot, n))
-        u = used[idx]
-        Ab = u.sum(axis=1).astype(float)
-        with np.errstate(invalid="ignore", divide="ignore"):
-            Bu = np.where(u, np.nan_to_num(b[idx]), 0).sum(1) / Ab
-            Cu = np.where(u, c[idx], 0).sum(1) / Ab
-        ABCb = Ab * Bu * Cu
-        boots[(rule, D, P)] = dict(A=Ab, B=Bb, C=Cb, logC=logC_b, ABC=ABCb)
+        Ab = used[idx].sum(axis=1).astype(float)
+        boots[(rule, D, P)] = dict(A=Ab, B=Bb, C=Cb, logC=logC_b)
         q = lambda v: np.nanpercentile(v, [2.5, 97.5]) if np.isfinite(v).any() else (np.nan, np.nan)
         fc = g.category.value_counts()
         rows.append(dict(
@@ -219,24 +212,15 @@ def condition_table(runs, curves, n_boot, rng):
             B_median=float(np.nanmedian(b[used])) if A else np.nan,
             C=Cm, C_lo=q(Cb)[0], C_hi=q(Cb)[1], C_median=float(np.median(c[used])) if A else np.nan,
             C_geomean=float(np.exp(np.log(c[used]).mean())) if A else np.nan,
-            ABC=A * Bm * Cm, ABC_lo=q(ABCb)[0], ABC_hi=q(ABCb)[1],
             **{f"n_{k}": int(fc.get(k, 0)) for k in CATS}))
     tab = pd.DataFrame(rows)
-    for rule, g in tab.groupby("rule"):
-        i = g.index
-        tab.loc[i, "ABC_rel"] = g.ABC / g.ABC.max()
-        tab.loc[i, "rank_ABC"] = g.ABC.rank(ascending=False, method="min")
-        # alternative composite: mean percentile rank of A, B, C (equal weights, scale free)
-        tab.loc[i, "composite_rank"] = (g.A.rank(pct=True) + g.B.rank(pct=True) + g.C.rank(pct=True)) / 3
-        tab.loc[i, "ABgmC"] = g.A * g.B * g.C_geomean
-        tab.loc[i, "rank_ABgmC"] = tab.loc[i, "ABgmC"].rank(ascending=False, method="min")
     return tab, boots
 
 
 def pooled(tab, boots, rule, by, val, measure):
     """Mean over the other parameter of per-condition values at by=val, with a 95% interval: for A a Wilson
     interval on the pooled counts (scaled to runs per condition; a bootstrap gives the zero-width interval
-    [30, 30] when every run succeeds), for B, C and A x B x C the percentile bootstrap."""
+    [30, 30] when every run succeeds), for B and C the percentile bootstrap."""
     other = "D" if by == "P" else "P"
     g = tab[(tab.rule == rule) & (tab[by] == val)]
     if g.empty:
@@ -435,14 +419,9 @@ def compare(gx, gy, label_x, label_y):
     return rows
 
 
-def contrasts(runs, tab, rule):
+def contrasts(runs, rule):
     g = runs[runs.rule == rule]
-    t = tab[tab.rule == rule]
     cond = lambda D, P: g[(g.D == D) & (g.P == P)]
-    best = t.sort_values("ABC", ascending=False).iloc[0]
-    bD, bP = int(best.D), float(best.P)
-    c_best = pd.DataFrame(compare(cond(bD, bP), cond(*ORIGINAL), f"best ({bD},{bP})", "original (100,0)"))
-    c_best["p_holm"] = holm(c_best.p)
     # each of the 59 other conditions vs the original, Holm within measure
     rows = []
     for D in D_VALUES:
@@ -463,29 +442,28 @@ def contrasts(runs, tab, rule):
     for c in (cP, cD):
         if len(c):
             c["p_holm"] = holm(c.p)
-    return c_best, c_all, cP, cD, (bD, bP)
+    return c_all, cP, cD
 
 
 # =============================== figures ===============================
 def fmt_val(v, kind):
     if not np.isfinite(v):
         return ""
-    return {"A": f"{v:.0f}", "B": f"{v:.2f}", "C": f"{v / 1e3:.1f}", "ABC": f"{v / 1e6:.2f}"}[kind]
+    return {"A": f"{v:.0f}", "B": f"{v:.2f}", "C": f"{v / 1e3:.1f}"}[kind]
 
 
 HEAT_SPECS = [  # key, file name, colourbar label, title
     ("A", "P-D-final-num-runs", "Successful runs (of 30)", "(a) Successful runs A"),
     ("B", "P-D-final-size", "Mean active cells per\nreplication event", "(b) Replication-event size B, t = 1500-2000"),
     ("C", "P-D-final-nctypes", "Cumulative pattern\ntypes (x10$^3$)", "(c) Pattern types C, t = 2000 (end of run)"),
-    ("ABC", "P-D-overall-performance", "A x B x C (x10$^6$)", "(d) Overall performance A x B x C"),
 ]
 
 
-def heat_panel(fig, ax, cax, t, key, label, title, best=None):
+def heat_panel(fig, ax, cax, t, key, label, title):
     grid = np.full((len(P_VALUES), len(D_VALUES)), np.nan)
     for r in t.itertuples():
         grid[P_VALUES.index(float(r.P)), D_VALUES.index(int(r.D))] = getattr(r, key)
-    scale = {"C": 1e3, "ABC": 1e6}.get(key, 1.0)
+    scale = 1e3 if key == "C" else 1.0
     shown = grid / scale
     finite = shown[np.isfinite(shown)]
     vmin, vmax = (finite.min(), finite.max()) if finite.size else (0, 1)
@@ -507,7 +485,7 @@ def heat_panel(fig, ax, cax, t, key, label, title, best=None):
     ax.set_xticks(range(len(D_VALUES)), D_VALUES)
     ax.set_yticks(range(len(P_VALUES)), [f"{p:.1f}" for p in P_VALUES])
     ax.set_xlabel("Spatial interaction range $D$")
-    ax.set_ylabel("Dyadic interaction probability $P$")
+    ax.set_ylabel("Dyadic interaction\nprobability $P$")
     ax.tick_params(length=0)
     for s in ax.spines.values():
         s.set_visible(False)
@@ -515,11 +493,6 @@ def heat_panel(fig, ax, cax, t, key, label, title, best=None):
     # each box is a black line over a wider white one, so it stays visible on the darkest cells too
     ax.add_patch(Rectangle((oj - 0.47, oi - 0.47), 0.94, 0.94, fill=False, ec="white", lw=2.9, zorder=5))
     ax.add_patch(Rectangle((oj - 0.47, oi - 0.47), 0.94, 0.94, fill=False, ec="black", lw=1.3, zorder=6))
-    if best is not None:
-        bi, bj = P_VALUES.index(best[1]), D_VALUES.index(best[0])
-        ax.add_patch(Rectangle((bj - 0.43, bi - 0.43), 0.86, 0.86, fill=False, ec="white", lw=2.4, zorder=5))
-        ax.add_patch(Rectangle((bj - 0.43, bi - 0.43), 0.86, 0.86, fill=False, ec="black", lw=1.1,
-                               ls=(0, (2, 1.4)), zorder=6))
     cb = fig.colorbar(im, cax=cax)
     cb.set_label(label, fontsize=7)
     cb.ax.tick_params(labelsize=6.5, length=2)
@@ -527,49 +500,51 @@ def heat_panel(fig, ax, cax, t, key, label, title, best=None):
     ax.set_title(title, fontsize=8, loc="left", pad=4)
 
 
-def fig5(tab, out, best):
+def fig5(tab, out):
     t = tab[tab.rule == "intended"]
     fig = plt.figure(figsize=(DOUBLE_COL, DOUBLE_COL * 0.64))
-    gs = fig.add_gridspec(2, 5, width_ratios=[1, 0.035, 0.42, 1, 0.035], wspace=0.05, hspace=0.62,
-                          left=0.08, right=0.92, top=0.94, bottom=0.12)
-    for n, (key, _, label, title) in enumerate(HEAT_SPECS):
-        r, c = divmod(n, 2)
-        heat_panel(fig, fig.add_subplot(gs[r, 3 * c]), fig.add_subplot(gs[r, 3 * c + 1]), t, key, label, title,
-                   best=best if key == "ABC" else None)
-    fig.text(0.5, 0.0, "Solid box: original setting (D, P) = (L, 0) (top-right cell). Dashed box in (d): "
-             "condition with the largest A x B x C. B: final 500 steps; C: after all 2000 steps.",
+    gs = fig.add_gridspec(2, 4, wspace=0.8, hspace=0.7,
+                          left=0.10, right=0.94, top=0.94, bottom=0.12)
+    slots = [gs[0, :2], gs[0, 2:], gs[1, 1:3]]
+    for slot, (key, _, label, title) in zip(slots, HEAT_SPECS):
+        panel = slot.subgridspec(1, 2, width_ratios=[1, 0.04], wspace=0.06)
+        ax = fig.add_subplot(panel[0, 0])
+        heat_panel(fig, ax, fig.add_subplot(panel[0, 1]), t, key, label, title)
+        if key == "B":
+            ax.set_ylabel("")  # Shared P rows; avoid the adjacent panel's colorbar label.
+    fig.text(0.5, 0.0, "Box: original setting (D, P) = (L, 0) (top-right cell). "
+             "B: final 500 steps; C: after all 2000 steps.",
              ha="center", fontsize=6.5, color="#444444")
     savefig(fig, out, "fig5_heatmaps")
     for key, fname, label, title in HEAT_SPECS:  # single panels, drop-in file names
         fig = plt.figure(figsize=(92 * MM, 58 * MM))
         gs = fig.add_gridspec(1, 2, width_ratios=[1, 0.04], wspace=0.06, left=0.15, right=0.86, bottom=0.2, top=0.9)
         heat_panel(fig, fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), t, key, label,
-                   title[4:], best=best if key == "ABC" else None)
+                   title[4:])
         savefig(fig, out, fname)
 
 
-def label_set(best):
-    """Labelled points: the original setting, the best condition and the Fig. 7 conditions."""
+def label_set():
+    """Label the original setting and the Fig. 7 conditions, without a composite ranking."""
     keys = {ORIGINAL: "original (L, 0)"}
     for D, P, _ in SNAP_CONDS:
         keys.setdefault((D, P), f"({D}, {P:.1f})")
-    keys[best] = keys.get(best, f"({best[0]}, {best[1]:.1f})") + " best"
     return keys
 
 
 # label offsets (points) per panel of the 2-D version: (A,B), (A,C), (B,C); default (4, 3)
 PAIR_OFFSETS = [
     {ORIGINAL: (5, -2), (10, 0.0): (-48, 4), (20, 0.2): (-50, -4), (100, 1.0): (-62, -16)},
-    {ORIGINAL: (-10, 7), (10, 0.0): (-48, -10), (20, 0.2): (-52, 6), (100, 1.0): (-66, 2)},
+    {ORIGINAL: (-10, 7), (10, 0.0): (-48, -10), (20, 0.2): (-52, 6), (100, 1.0): (-66, -20)},
     {ORIGINAL: (6, -12), (10, 0.0): (-6, -14), (20, 0.2): (-12, 18), (100, 1.0): (6, -3)},
 ]
 
 
-def fig6(tab, out, best):
+def fig6(tab, out):
     t = tab[tab.rule == "intended"].copy()
     cmap = sns.color_palette(HEAT_CMAP, as_cmap=True)
     norm = Normalize(0, 1)
-    labels = label_set(best)
+    labels = label_set()
     lab_mask = np.array([(int(r.D), float(r.P)) in labels for r in t.itertuples()])
     # ---- 3-D
     fig = plt.figure(figsize=(130 * MM, 108 * MM))
@@ -577,7 +552,7 @@ def fig6(tab, out, best):
     z0 = 0.0
     for r in t.itertuples():  # stems to the floor help to read depth
         ax.plot([r.A, r.A], [r.B, r.B], [z0, r.C / 1e3], color="#b5b5b5", lw=0.4, zorder=1)
-    ax.scatter(t.A, t.B, t.C / 1e3, c=t.ABC_rel, cmap=cmap, norm=norm, s=np.where(lab_mask, 30, 18),
+    ax.scatter(t.A, t.B, t.C / 1e3, c=t.P, cmap=cmap, norm=norm, s=np.where(lab_mask, 30, 18),
                edgecolors=np.where(lab_mask, "black", "#444444"), linewidths=np.where(lab_mask, 0.9, 0.3),
                depthshade=False, zorder=3)
     # labels: annotate the projected 2-D position of each labelled point (leader lines)
@@ -609,7 +584,8 @@ def fig6(tab, out, best):
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     cax = fig.add_axes([0.84, 0.25, 0.025, 0.5])
     cb = fig.colorbar(sm, cax=cax)
-    cb.set_label("Relative overall performance\nA x B x C / max (as Fig. 5d)", fontsize=7)
+    cb.set_label("Dyadic interaction probability $P$", fontsize=7)
+    cb.set_ticks(P_VALUES)
     cb.ax.tick_params(labelsize=6.5)
     savefig(fig, out, "fig6_3d")
     # ---- 2-D pair panels
@@ -624,9 +600,9 @@ def fig6(tab, out, best):
     for ax, (xk, yk, xl, yl), offs in zip(axes, pairs, PAIR_OFFSETS):
         xv = t[xk].to_numpy(float) + (jit if xk == "A" else 0)
         yv = t[yk].to_numpy(float) / (1e3 if yk == "C" else 1)
-        ax.scatter(xv[~lab_mask], yv[~lab_mask], c=t.ABC_rel[~lab_mask], cmap=cmap, norm=norm, s=15,
+        ax.scatter(xv[~lab_mask], yv[~lab_mask], c=t.P[~lab_mask], cmap=cmap, norm=norm, s=15,
                    edgecolors="#444444", linewidths=0.3, zorder=3)
-        ax.scatter(xv[lab_mask], yv[lab_mask], c=t.ABC_rel[lab_mask], cmap=cmap, norm=norm, s=24,
+        ax.scatter(xv[lab_mask], yv[lab_mask], c=t.P[lab_mask], cmap=cmap, norm=norm, s=24,
                    edgecolors="black", linewidths=0.9, zorder=4)
         for (D, P), lab in labels.items():
             m = ((t.D == D) & (t.P == P)).to_numpy()
@@ -639,10 +615,13 @@ def fig6(tab, out, best):
         ax.set_ylabel(yl, labelpad=2)
         if xk == "B":
             ax.set_xlim(None, xv.max() + 0.45 * (xv.max() - xv.min()))
+        if yk == "C":
+            ax.set_ylim(0, yv.max() * 1.18)
         sns.despine(ax=ax)
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     cb = fig.colorbar(sm, cax=fig.add_subplot(gs[0, 3]))
-    cb.set_label("A x B x C / max", fontsize=7)
+    cb.set_label("Dyadic interaction probability $P$", fontsize=7)
+    cb.set_ticks(P_VALUES)
     cb.ax.tick_params(labelsize=6.5)
     fig.text(0.5, -0.02, f"A is an integer count; points are jittered horizontally by up to +/-{A_JITTER} so that "
              "conditions with equal A do not overlap.", ha="center", fontsize=6.5, color="#444444")
@@ -961,9 +940,9 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "results" / "npj_rev" / "ext1"))
     ap.add_argument("--n-boot", type=int, default=10000)
     ap.add_argument("--seed", type=int, default=20261022)
-    ap.add_argument("--sweep-root", default=str(ROOT / "results" / "spatial_dyadic"),
+    ap.add_argument("--sweep-root", default=str(SD_ROOT),
                     help="spatial_dyadic sweep (intended/, as_coded/, sayama_lba_fig1.csv)")
-    ap.add_argument("--snap-root", default=str(ROOT / "results" / "spatial_dyadic_snapshots"),
+    ap.add_argument("--snap-root", default=str(SNAP_ROOT),
                     help="snapshot configs (intended/D*_P*/seed_*_t*.npy)")
     args = ap.parse_args()
     SD_ROOT, SNAP_ROOT = Path(args.sweep_root), Path(args.snap_root)
@@ -977,15 +956,16 @@ def main():
         parts.append(df)
         curves.update(cv)
     runs = pd.concat(parts, ignore_index=True)
+    assert len(runs) == 3600, "both complete 60-condition sweeps are required (P=0 shared)"
+    assert (runs.groupby(["rule", "D", "P"]).size() == 30).all()
+    assert not runs.duplicated(["rule", "D", "P", "seed"]).any()
+    assert (runs.n_rows == T_END).all(), "incomplete simulation trajectories"
     runs.to_csv(out / "per_run.csv", index=False)
     n_cond = runs.groupby("rule").apply(lambda g: g.groupby(["D", "P"]).ngroups, include_groups=False)
     print("conditions loaded:", n_cond.to_dict(), "| runs:", runs.groupby("rule").size().to_dict())
 
     tab, boots = condition_table(runs, curves, args.n_boot, rng)
     tab.to_csv(out / "conditions.csv", index=False)
-    ti = tab[tab.rule == "intended"]
-    best_row = ti.sort_values("ABC", ascending=False).iloc[0]
-    best = (int(best_row.D), float(best_row.P))
 
     # ---- (d) statistics
     datasets = {"intended": regression_data(runs, "intended"),
@@ -1003,8 +983,7 @@ def main():
     strata = pd.concat([x[1] for x in tr], ignore_index=True)
     trends.to_csv(out / "trends.csv", index=False)
     strata.to_csv(out / "trends_strata.csv", index=False)
-    c_best, c_all, cP, cD, _ = contrasts(runs, tab, "intended")
-    c_best.to_csv(out / "contrasts_original_vs_best.csv", index=False)
+    c_all, cP, cD = contrasts(runs, "intended")
     c_all.to_csv(out / "contrasts_original_vs_all.csv", index=False)
     cP.to_csv(out / "contrasts_P0_vs_P.csv", index=False)
     cD.to_csv(out / "contrasts_D100_vs_D.csv", index=False)
@@ -1034,14 +1013,14 @@ def main():
     a20, an20 = int(ga[ga.D >= 20].runaway.sum()), int((ga.D >= 20).sum())
 
     # ---- figures
-    fig5(tab, out, best)
-    fig6(tab, out, best)
+    fig5(tab, out)
+    fig6(tab, out)
     fig_trends(tab, boots, out)
     fig_failures(runs, out)
     sel, snapst, snapdom = snapshots(runs, out)
 
     # ---- (f) summary
-    write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_all, cP, cD, best, sens, sel,
+    write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_all, cP, cD, sens, sel,
                   snapst, snapdom, (r10, n10, r20, n20, bridge_p, a10, an10, a20, an20), args)
     print(f"wrote {out}")
 
@@ -1084,18 +1063,17 @@ def locality_effect(pos, neg, ns, name):
     return f"does not significantly change {name} at any P"
 
 
-def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_all, cP, cD, best, sens, sel,
+def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_all, cP, cD, sens, sel,
                   snapst, snapdom, bridge, args):
     ti = tab[tab.rule == "intended"].set_index(["D", "P"])
     gi = runs[runs.rule == "intended"]
     o = ti.loc[ORIGINAL]
-    b = ti.loc[best]
     lines = tex_lines()
     md = []
     w = md.append
     w("# Extension I (Sec. 3) with the intended dyadic rule: numbers for the revision\n")
     w(f"Generated by `scripts/npj_rev_ext1.py` (bootstrap: {args.n_boot} resamples, seed {args.seed}). "
-      f"Data: `results/spatial_dyadic/intended` (JAX, winner_rule='original', score='mix', L=100, 2000 steps), "
+      f"Data: `{args.sweep_root}/intended` (JAX, winner_rule='original', score='mix', L=100, 2000 steps), "
       f"{len(gi)} runs in {gi.groupby(['D', 'P']).ngroups} conditions "
       f"(runs per condition: {gi.groupby(['D', 'P']).size().min()}-{gi.groupby(['D', 'P']).size().max()}). "
       "P = 0 runs are shared by both dyadic rules. Every finding below is computed from the data at run time.\n")
@@ -1127,12 +1105,12 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
     w("- **A** = successful runs of 30 (Wilson 95% interval); **B** = per-step ensemble mean of `mean_rep_size` over "
       "successful runs, averaged over the final 500 steps (t = 1500-2000); **C** = mean over successful runs of the "
       "cumulative pattern types at the end of the run (t = 2000); 95% intervals for B and C: percentile bootstrap "
-      "over the successful runs of the condition; for A x B x C: bootstrap over all 30 runs.")
+      "over the successful runs of the condition.")
     w("- **For the Methods** (state this in the manuscript): the B and C intervals are *conditional on success* "
       "(resampling only the successful runs of a condition), whereas `analyze_spatial_dyadic.bootstrap` resamples all "
-      "runs; A x B x C resamples all runs. Means over D or P: A with a Wilson interval on the pooled counts (scaled "
+      "runs. Means over D or P: A with a Wilson interval on the pooled counts (scaled "
       "to runs per condition; a bootstrap would give the zero-width interval [30, 30] where every run succeeds), "
-      "B, C and A x B x C with the mean of the per-condition bootstrap replicates.")
+      "B and C with the mean of the per-condition bootstrap replicates.")
     nan_gap = (tab.B - tab.B_mean_of_runs).abs().max()
     nan_runs = runs[runs.n_nan_final500 > 0]
     w(f"- B as the ensemble curve average equals the mean of per-run B (max difference {nan_gap:.1e}); the per-run "
@@ -1142,55 +1120,32 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
 
     # ---------------- Fig 5
     w("## (a) Fig. 5 replacement\n")
-    w("Files: `fig5_heatmaps.pdf/png` (2x2 with colourbars) and the single panels `P-D-final-num-runs`, "
-      "`P-D-final-size`, `P-D-final-nctypes`, `P-D-overall-performance` (.pdf/.png; same base names as the "
-      "manuscript's files; about 92 mm wide, so include them with `width=0.49\\textwidth` rather than "
-      "`height=1.4in`). Panel titles: B over t = 1500-2000, C at t = 2000 (end of run), as in the caption.\n")
+    w("Files: `fig5_heatmaps.pdf/png` (three panels with colourbars) and the single panels `P-D-final-num-runs`, "
+      "`P-D-final-size`, `P-D-final-nctypes` (.pdf/.png). The manuscript uses the combined three-panel PDF. "
+      "Panel titles: B over t = 1500-2000, C at t = 2000 (end of run), as in the caption.\n")
     w("**Orientation**: columns D = 10 ... 100 from left to right; rows P = 0 (top) ... 1 (bottom). "
       "The original setting (D, P) = (L, 0) is the **top-right** cell in every panel (solid box), so the "
-      "manuscript's 'top right corner' wording stays correct. Panel (d) also marks the best condition "
-      "(dashed box). Both boxes are black lines on a white halo, visible on the darkest cells. Annotations: A as "
-      "counts, B with two decimals, C in thousands, A x B x C in millions. "
+      "manuscript's 'top right corner' wording stays correct. Boxes are black lines on a white halo, visible "
+      "on the darkest cells. Annotations: A as counts, B with two decimals, C in thousands. "
       f"Colour map: seaborn '{HEAT_CMAP}' (sequential, colour-blind safe), one colourbar per panel.\n")
     w("| measure | min (condition) | max (condition) | original (L,0) [95% CI] |")
     w("|---|---|---|---|")
-    for key, nm in (("A", "A"), ("B", "B"), ("C", "C"), ("ABC", "A x B x C")):
+    for key, nm in (("A", "A"), ("B", "B"), ("C", "C")):
         mn, mx = ti[key].idxmin(), ti[key].idxmax()
-        lo, hi = {"A": ("A_wilson_lo", "A_wilson_hi"), "B": ("B_lo", "B_hi"), "C": ("C_lo", "C_hi"),
-                  "ABC": ("ABC_lo", "ABC_hi")}[key]
+        lo, hi = {"A": ("A_wilson_lo", "A_wilson_hi"), "B": ("B_lo", "B_hi"), "C": ("C_lo", "C_hi")}[key]
         f = (lambda v: f"{v:.3g}") if key != "A" else (lambda v: f"{v:.0f}")
         w(f"| {nm} | {f(ti[key].min())} {ck(mn)} | {f(ti[key].max())} {ck(mx)} | {f(o[key])} [{o[lo]:.3g}, {o[hi]:.3g}] |")
     w("")
-    w(f"Best condition by A x B x C: (D, P) = {ck(best)}: A = {b.A:.0f}, B = {b.B:.2f}, C = {b.C:.0f}, A x B x C = "
-      f"{b.ABC / 1e6:.2f}e6 [{b.ABC_lo / 1e6:.2f}, {b.ABC_hi / 1e6:.2f}]e6, i.e. {b.ABC / o.ABC:.1f} times the "
-      f"original ({o.ABC / 1e6:.2f}e6 [{o.ABC_lo / 1e6:.2f}, {o.ABC_hi / 1e6:.2f}]e6). "
-      f"The original ranks {int(o.rank_ABC)} of {len(ti)} by A x B x C.")
-    top = ti.sort_values("ABC", ascending=False).head(10)
-    w("\nTop 10 by A x B x C (all at P >= " + f"{top.index.get_level_values('P').min():.1f}):\n")
-    w("| rank | (D, P) | A [Wilson] | B [CI] | C [CI] | A x B x C (x10^6) [CI] |")
-    w("|---|---|---|---|---|---|")
-    for k, r in top.iterrows():
-        w(f"| {int(r.rank_ABC)} | {ck(k)} | {r.A:.0f} [{r.A_wilson_lo:.1f}, {r.A_wilson_hi:.1f}] | {r.B:.2f} "
-          f"[{r.B_lo:.2f}, {r.B_hi:.2f}] | {r.C:.0f} [{r.C_lo:.0f}, {r.C_hi:.0f}] | {r.ABC / 1e6:.2f} "
-          f"[{r.ABC_lo / 1e6:.2f}, {r.ABC_hi / 1e6:.2f}] |")
-    rk = stats.spearmanr(ti.ABC, ti.composite_rank)[0]
-    rk2 = stats.spearmanr(ti.ABC, ti.ABgmC)[0]
-    best_gm = ti.ABgmC.idxmax()
-    w(f"\nRobustness of the ranking: Spearman rho between A x B x C and the equal-weight mean percentile rank of "
-      f"(A, B, C) = {rk:.2f}; with C replaced by its geometric mean over runs (log-C scale) rho = {rk2:.2f}, best "
-      f"condition {ck(best_gm)}, original ranked {int(ti.loc[ORIGINAL].rank_ABgmC)}.\n")
-
     # per-P pooled table
-    w("Mean over D (95% interval: A Wilson on pooled counts; B, C, A x B x C bootstrap), intended rule:\n")
-    w("| P | A | B | C | A x B x C (x10^6) |")
-    w("|---|---|---|---|---|")
+    w("Mean over D (95% interval: A Wilson on pooled counts; B and C bootstrap), intended rule:\n")
+    w("| P | A | B | C |")
+    w("|---|---|---|---|")
     for P in P_VALUES:
         cells = []
-        for m in ("A", "B", "C", "ABC"):
+        for m in ("A", "B", "C"):
             v = pooled(tab, boots, "intended", "P", P, m)
-            sc = {"C": 1, "ABC": 1e6}.get(m, 1)
             fm = "{:.0f}" if m == "C" else "{:.2f}"
-            cells.append(f"{fm.format(v[0] / sc)} [{fm.format(v[1] / sc)}, {fm.format(v[2] / sc)}]")
+            cells.append(f"{fm.format(v[0])} [{fm.format(v[1])}, {fm.format(v[2])}]")
         w(f"| {P:.1f} | " + " | ".join(cells) + " |")
     reference_path = SD_ROOT / "sayama_lba_fig1.csv"
     if reference_path.exists():
@@ -1225,22 +1180,18 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
             cells.append(f"{fm.format(v[0])} [{fm.format(v[1])}, {fm.format(v[2])}]")
         w(f"| {D} | " + " | ".join(cells) + " |")
     w("\nFull per-condition table with intervals: `conditions.csv` (rule, D, P, n_runs, A, A_wilson_lo/hi (counts), "
-      "B, B_lo/hi, C, C_lo/hi, ABC, ABC_lo/hi, ABC_rel, ranks, failure counts). Trends with per-D/per-P lines "
+      "B, B_lo/hi, C, C_lo/hi, failure counts). Trends with per-D/per-P lines "
       "and pooled intervals: `figS_trends.pdf`.\n")
 
     # ---------------- Fig 6
-    labs = label_set(best)
+    labs = label_set()
     w("## (b) Fig. 6 replacement\n")
     w("Files: `fig6_3d.pdf/png` (3-D scatter, one point per (D, P)) and `fig6_pairs.pdf/png` (the same data as "
       "three 2-D projections; recommended, because no point is hidden and labels do not overlap). "
-      "**Colour metric**: relative overall performance A x B x C / max over the 60 conditions (the quantity of "
-      f"Fig. 5d, rescaled to [0, 1]); colour map '{HEAT_CMAP}' with a colourbar. The old ideal point (30, 6, 11000) "
-      f"is no longer meaningful (C now reaches {ti.C.max():.0f}). Labelled points (black outline): "
-      f"{'; '.join(labs.values())}, i.e. the Fig. 7 conditions and the best condition by A x B x C. "
+      f"**Colour parameter**: dyadic interaction probability P; colour map '{HEAT_CMAP}' with a colourbar. "
+      f"Labelled points (black outline): {'; '.join(labs.values())}, i.e. the Fig. 7 conditions. "
       f"**In `fig6_pairs`, A (an integer count) is jittered horizontally by up to +/-{A_JITTER}** so that "
-      "conditions with equal A do not overlap; the figure states this, and the caption should too. "
-      f"The other top conditions by A x B x C ({', '.join(ck(k) for k in top.index[1:4])}) lie next to the best "
-      "one and are not labelled separately.\n")
+      "conditions with equal A do not overlap; the figure states this, and the caption should too.\n")
 
     # ---------------- statistics
     w("## (d) R1.1 statistics\n")
@@ -1295,13 +1246,6 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
     w("")
 
     w("### Contrasts\n")
-    w(f"**Original (100, 0) vs best by A x B x C {ck(best)}** (`contrasts_original_vs_best.csv`; Holm over the 3 tests; "
-      "Cliff's delta = P(best > original) - P(best < original); for A it equals the difference in success fraction):\n")
-    w("| measure | best | original | test | p | p Holm | Cliff's delta |")
-    w("|---|---|---|---|---|---|---|")
-    for r in c_best.itertuples():
-        w(f"| {r.measure} | {r.stat_x:.3g} (n={r.n_x}) | {r.stat_y:.3g} (n={r.n_y}) | {r.test} | {pf(r.p)} | "
-          f"{pf(r.p_holm)} | {r.cliffs_delta:+.2f} |")
     w("\n**Each of the 59 other conditions vs the original** (`contrasts_original_vs_all.csv`, Holm within measure):\n")
     for m in ("A", "B", "C"):
         g = c_all[c_all.measure == m]
@@ -1348,8 +1292,7 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
     for r in tC.itertuples():
         w(f"- log C trend in {r.trend_in}: adjusted slope {r.slope_adj:.3g} (HC3 p {pf(r.slope_p_hc3)}), "
           f"{r.strata_pos_sig}/{r.strata_neg_sig} strata significantly +/-.")
-    w(f"- Ranking with geometric-mean C: best {ck(best_gm)}, Spearman rho with the A x B x C ranking {rk2:.2f} (above). "
-      "Rank-based tests (Mann-Whitney, Spearman) are unchanged by the log transform.\n")
+    w("- Rank-based tests (Mann-Whitney, Spearman) are unchanged by the log transform.\n")
 
     # ---------------- R1.2
     w("## (e) R1.2: failure breakdown\n")
@@ -1488,7 +1431,6 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
     nB_lo = int(((bB.p_holm < 0.05) & (bB.cliffs_delta < 0)).sum())
     cC_ = c_all[c_all.measure == "C"]
     nC_hi = int(((cC_.p_holm < 0.05) & (cC_.cliffs_delta > 0)).sum())
-    nABC_hi = int((ti.ABC_lo > o.ABC_hi).sum())
     jB = joint[(joint.data == "intended") & (joint.response == "B") & (joint.model == "OLS")].set_index("block")
     jA = joint[(joint.data == "intended") & (joint.response == "A") & (joint.model.str.startswith("logit"))].set_index("block")
     bmax = ti.B.idxmax()
@@ -1509,9 +1451,6 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
     P_Cmax = P_VALUES[int(np.nanargmax(cP_means))]
     C_interior = P_VALUES[0] < P_Cmax < P_VALUES[-1]
     d_C10 = cP[(cP.x == f"P={P_VALUES[-1]}") & (cP.measure == "C")]
-    cbm = c_best.set_index("measure")
-    best_up = [m for m in cbm.index if cbm.loc[m, "p_holm"] < 0.05 and cbm.loc[m, "cliffs_delta"] > 0]
-    best_dn = [m for m in cbm.index if cbm.loc[m, "p_holm"] < 0.05 and cbm.loc[m, "cliffs_delta"] < 0]
     run_D = sorted(gi[gi.runaway].D.unique().tolist())
     run_where = ("none" if not run_D else f"all at D = {run_D[0]}" if len(run_D) == 1
                  else f"at D = {', '.join(map(str, run_D))}")
@@ -1525,9 +1464,7 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
 
     entries = [
         (107, "We show this extension substantially enhances",
-         f"A x B x C of the best condition {ck(best)} is {b.ABC / o.ABC:.1f}x the original's; {nABC_hi}/59 conditions "
-         f"have a bootstrap interval of A x B x C entirely above the original's. Best vs original (Holm p < 0.05): "
-         f"higher {lstr(best_up) or 'none'}, lower {lstr(best_dn) or 'none'}. Across the grid dyadicity {dy_C} C and "
+         f"Across the grid dyadicity {dy_C} C and "
          f"{dy_B} B, so any enhancement is in success and exploration, not replicator size."),
         (137, "Locality promotes growth; dyadicity promotes diversity",
          f"Table 1 row. Growth: locality (smaller D) {loc_A} success A (pooled Spearman of success on D rho = "
@@ -1578,10 +1515,6 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
          + f"), maximal at P = {P_Cmax:.1f}" + (" (an interior optimum)" if C_interior else " (no interior optimum)")
          + f"; Spearman rho = {rC_P.spearman_rho:.2f}, positive in {rC_P.strata_pos_sig}/{rC_P.n_strata} D strata. "
          f"Max C at {ck(cmax)} ({ti.C.max():.0f}). C above the original in {nC_hi}/59 conditions after Holm."),
-        (221, "Finally, Figures \\ref{fig:P-D-final}d and \\ref{fig:3D-plot} highlighted",
-         f"{'Still correct' if int(o.rank_ABC) > 1 else 'Not supported'}: original ranks {int(o.rank_ABC)}/60 by "
-         f"A x B x C; best {ck(best)} at {b.ABC / o.ABC:.1f}x (Cliff's delta for C "
-         f"{cbm.loc['C', 'cliffs_delta']:+.2f}, p Holm {pf(cbm.loc['C', 'p_holm'])})."),
         (223, "too frequent dyadic interaction would negatively affect",
          f"Size half: dyadicity {dy_B} B (rho = {rB_P.spearman_rho:.2f}) - "
          + ("consistent with the claim" if dy_B == "lowers" else "contradicts the claim")
@@ -1596,8 +1529,7 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
          f"Caption (c): C maximal at P = {P_Cmax:.1f} (largest condition {ck(cmax)}); colour range "
          f"{ti.C.min():.0f}-{ti.C.max():.0f}."),
         (243, "Markers are colored according to their proximity to the ideal outcome",
-         f"New colour metric: A x B x C relative to the best condition (colourbar). Top 10 all at P >= "
-         f"{top.index.get_level_values('P').min():.1f}. If `fig6_pairs` is used, state the jitter of A "
+         "Color now identifies the model parameter P. If `fig6_pairs` is used, state the jitter of A "
          f"(+/-{A_JITTER})."),
     ]
     # l.261 / l.264 / l.272 from the snapshot candidates
@@ -1660,13 +1592,11 @@ def write_summary(out, runs, tab, boots, reg, joint, trends, strata, c_best, c_a
     entries.append((264, "While the population appears to be dominated by a major self-replicating pattern",
                     ("Candidate medians: " + "; ".join(s for *_, s in cmp_t) + ". 'More variation than (a)' (lower "
                      "dominant share and more distinct patterns) holds at t = " + (lstr(yes_t) or "none")
-                     + " and not at t = " + (lstr(no_t) or "none") + ". " if cmp_t else "Snapshots pending. ")
-                    + f"(20, 0.2) ranks {int(ti.loc[(20, 0.2)].rank_ABC)}/60 by A x B x C."))
+                    + " and not at t = " + (lstr(no_t) or "none") + ". " if cmp_t else "Snapshots pending. ")))
     d_last = dom_row(20, 0.2, max(SNAP_TIMES))
     entries += [
-        (272, "Finally, in the optimal setting with spatial locality and dyadic interactions",
-         (f"(20, 0.2) is not optimal for the intended rule (rank {int(ti.loc[(20, 0.2)].rank_ABC)}/60); best by "
-          f"A x B x C is {ck(best)}." if best != (20, 0.2) else "(20, 0.2) is also the best condition here.")
+        (272, "spatial locality and dyadic interactions",
+         "The mixed setting (20, 0.2) is an illustrative snapshot condition."
          + (f" Its grown runs at t = {max(SNAP_TIMES)}: dominant share median {d_last.dom_median:.2f}, "
             f"{d_last.patterns_median:.0f} distinct patterns." if d_last is not None else "")),
         (274, "Overall, the results indicate that spatial locality and dyadicity of interactions can have significant",

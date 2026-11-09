@@ -25,29 +25,31 @@ its onset is stochastic and the probability rises most steeply near L=220-240
 within 20,000 steps. The former L=300-320 threshold is not retained. Periodic
 controls are withdrawn because periodic scoring and copying were not valid.
 
-The archived JAX runs also retain a scatter exception at cell (0,0).
-Set `legacy_corner=True` only when reproducing those runs; the paper
-reproduction scripts set it explicitly. Ordinary JAX execution drops invalid
-scatter entries correctly. The C engine has no corner exception.
-The spatial-dyadic sweep has not been rerun with the new corner behavior.
+The primary JAX sweep, comparisons and snapshots now use the corrected corner
+write and are stored under `results/corner_fixed/`. Historical runs retain the
+scatter exception at (0,0) and remain separate; `legacy_corner=True` selects
+that behavior only for historical reproduction. The C engine never had this
+exception. Adaptive batches retain each run's state and PRNG and split out
+large runs for efficiency; GPU checks establish exact agreement in tested cases.
 
 An ALIFE correction notice has been prepared; it has not yet been submitted or
-published. See [the correction text](docs/alife2026_erratum.md).
+published. Correspondence and submission drafts are not public benchmark assets.
 
 ## Install
 
-Python 3.10 or newer is required. The CPU engine also needs GCC (or a compatible
+The recorded experiments used Python 3.10; use that version for reproduction. The CPU engine also needs GCC (or a compatible
 `gcc` executable). Figure generation runs on the CPU.
 
 ```bash
-python -m pip install -e ".[paper]"
+uv venv --python 3.10
+uv pip install -e ".[paper]"
 ```
 
 For an analysis environment matching the revision, use
 [the exact analysis versions](docs/npj-analysis-constraints.txt):
 
 ```bash
-python -m pip install -e ".[paper]" -c docs/npj-analysis-constraints.txt
+uv pip install -e ".[paper]" -c docs/npj-analysis-constraints.txt
 ```
 
 ## Reproduce the revised figures and tables
@@ -57,11 +59,11 @@ Extract the prepared/released archive at the repository root, then run:
 ```bash
 tar -xzf npj-complexity-data.tar.gz
 sha256sum -c results/MANIFEST_npj.sha256
-python scripts/npj_rev_ext1.py
-python scripts/npj_rev_ext2_tables.py
-python scripts/npj_rev_ext2_figs.py --no-provisional
-python scripts/npj_revision_schematics.py
-python scripts/npj_revision_supplement.py
+uv run --no-sync python scripts/npj_rev_ext1.py
+uv run --no-sync python scripts/npj_rev_ext2_tables.py
+uv run --no-sync python scripts/npj_rev_ext2_figs.py --no-provisional
+uv run --no-sync python scripts/npj_revision_schematics.py
+uv run --no-sync python scripts/npj_revision_supplement.py
 ```
 
 Outputs are in `results/npj_rev/`. These commands reproduce Figures 1 and
@@ -90,11 +92,12 @@ winner-size / active-cell-count until it reaches one.
 The corrected simulation drivers and parameters are:
 
 - Extension I: `scripts/run_spatial_dyadic_sweep.py` (JAX/GPU;
-  explicitly preserves the archived corner behavior).
+  corrected corner writes; historical behavior requires an explicit flag).
 - Extension II: `scripts/run_scan_cpu.py` and
   `scripts/run_npj_recompute.sh` (C/CPU; full reruns are optional).
-- Rule checks: `JAX_PLATFORMS=cpu python scripts/validate_model_rules.py`.
-- Distribution checks: `python scripts/validate_cpu_engine.py`.
+- Rule checks: `JAX_PLATFORMS=cpu uv run --no-sync python scripts/validate_model_rules.py`.
+- Extension I reporting checks: `uv run --no-sync python scripts/validate_ext1_observables.py`.
+- Distribution checks: `uv run --no-sync python scripts/validate_cpu_engine.py`.
 
 JAX and C use different random generators. Equal seed numbers do not identify
 the same run across engines. Archived ALIFE behavior requires
@@ -105,9 +108,11 @@ Older exploratory runners are not the revision reproduction entry points.
 ## Preparing release assets
 
 ```bash
-python scripts/package_npj_data.py
+uv run --no-sync python scripts/package_npj_data.py
 ```
 
 This builds `dist/npj-complexity-data.tar.gz`, its checksum and provenance.
 It excludes obsolete periodic data and privately supplied Mathematica attachments.
+The public code archive also excludes gitignored material, and the data archive
+omits working Markdown reports. The public data guide is included explicitly.
 Code/data publication and manuscript submission must use the same frozen version.

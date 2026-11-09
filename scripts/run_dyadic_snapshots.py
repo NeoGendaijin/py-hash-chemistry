@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.simulation import SCHCParams, advance_one_step, initialize_state
+from scripts.run_provenance import FIXED_ROOT, complete_outputs, register_run
 
 
 def main():
@@ -36,20 +37,24 @@ def main():
     ap.add_argument("--seeds", default="0-7")
     ap.add_argument("--steps", type=int, default=2000)
     ap.add_argument("--save-steps", type=int, nargs="+", default=[1500, 1750, 2000])
-    ap.add_argument("--output-root", default=str(ROOT / "results" / "spatial_dyadic_snapshots"))
-    ap.add_argument("--sweep-root", default=str(ROOT / "results" / "spatial_dyadic"))
+    ap.add_argument("--output-root", default=str(FIXED_ROOT / "spatial_dyadic_snapshots"))
+    ap.add_argument("--sweep-root", default=str(FIXED_ROOT / "spatial_dyadic"))
+    ap.add_argument("--legacy-corner", action="store_true", help="reproduce the archived corner-write bug")
     args = ap.parse_args()
     lo, hi = map(int, args.seeds.split("-"))
     seeds = list(range(lo, hi + 1))
 
     for cond in args.conditions:
         D, P = int(cond.split(",")[0]), float(cond.split(",")[1])
-        params = SCHCParams(L=100, winner_rule="original", score="mix", legacy_corner=True,
+        params = SCHCParams(L=100, winner_rule="original", score="mix", legacy_corner=args.legacy_corner,
                             D=D, P=P, dyadic_rule=args.rule)
         step = jax.jit(jax.vmap(lambda s: advance_one_step(s, params)))
         states = jax.jit(jax.vmap(lambda k: initialize_state(k, params)))(jnp.stack([random.PRNGKey(s) for s in seeds]))
         out = Path(args.output_root) / args.rule / f"D{D}_P{P:.1f}"
-        out.mkdir(parents=True, exist_ok=True)
+        register_run(out, params, seeds, args.steps, save_steps=args.save_steps)
+        if complete_outputs(out, dict(seeds=seeds, steps=args.steps, save_steps=args.save_steps)):
+            print(f"D={D} P={P}: all requested snapshots already complete; reusing checked files", flush=True)
+            continue
         sweep_dir = Path(args.sweep_root) / ("intended" if P == 0.0 else args.rule) / f"D{D}_P{P:.1f}"
         mismatches = 0
         for t in range(1, args.steps + 1):
@@ -66,6 +71,8 @@ def main():
                         if len(ref) and int(ref.iloc[0]) != int((cfgs[b] > 0).sum()):
                             mismatches += 1
         print(f"D={D} P={P}: saved seeds {seeds} at {args.save_steps}; n_active mismatches vs sweep: {mismatches}", flush=True)
+        if mismatches:
+            raise RuntimeError("snapshot trajectory differs from the sweep")
 
 
 if __name__ == "__main__":

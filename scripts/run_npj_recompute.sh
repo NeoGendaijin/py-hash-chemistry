@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CPU re-computation of npj Sec. 4 with the corrected model (winner_rule=original, score=mix),
 # using the validated CPU engine. Run from the repository root, next to
-#   .venv/bin/python scripts/thermal_watchdog.py --pattern run_scan_cpu.py --grace 20 \
+#   uv run --no-sync python scripts/thermal_watchdog.py --pattern run_scan_cpu.py --grace 20 \
 #       --stop-file results/npj_recompute.STOP --log results/npj_recompute_thermal.csv
 # Jobs (see report/20261022_npj再計算リスト.md):
 #   J1  size scan without early stop: coarse L=200..400 (step 20) + onset region L=100..250, 100 seeds
@@ -12,7 +12,7 @@
 #   J5  40k-step horizon check (L=240/320/400, 100 seeds, early stop at mean size 2000)
 set -u
 cd "$(dirname "$0")/.."
-PY=.venv/bin/python
+PY="uv run --no-sync python"
 W=24
 STOP=results/npj_recompute.STOP
 run() {

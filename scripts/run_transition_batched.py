@@ -19,6 +19,7 @@ Run next to scripts/thermal_watchdog.py (an earlier L=400 scan overheated this m
 from __future__ import annotations
 
 import argparse
+import fcntl
 import sys
 import time
 from pathlib import Path
@@ -34,6 +35,7 @@ if str(ROOT) not in sys.path:
 
 from src.metrics import component_metrics
 from src.simulation import SCHCParams, SCHCState, advance_one_step, initialize_state
+from scripts.run_provenance import FIXED_ROOT, register_run
 
 HEADER = "step,max_fitness,mean_fitness,max_size,mean_size,cum_cell_types,cum_pattern_types,n_active,n_components"
 FMT = ["%d", "%.8f", "%.8f", "%d", "%.8f", "%d", "%d", "%d", "%d"]
@@ -63,17 +65,36 @@ def main():
     ap.add_argument("--death-prob", type=float, default=0.001)
     ap.add_argument("--checkpoint-interval", type=int, default=1000)
     ap.add_argument("--progress-interval", type=int, default=500)
-    ap.add_argument("--output-root", default=str(ROOT / "results" / "transition_fixed"))
+    ap.add_argument("--output-root", default=str(FIXED_ROOT / "transition_fixed"))
+    ap.add_argument("--legacy-corner", action="store_true", help="reproduce the archived corner-write bug")
     ap.add_argument("--init-config", default=None, help=".npy configuration shared by all seeds (seeds then only set the RNG)")
     args = ap.parse_args()
 
     L, seeds = args.size, parse_seeds(args.seeds)
     mu = float(eval(args.mu, {"__builtins__": {}}))
     params = SCHCParams(L=L, mu=mu, death_prob=args.death_prob, winner_rule=args.winner_rule,
-                        score=args.score, legacy_corner=True)
+                        score=args.score, legacy_corner=args.legacy_corner)
     run_dir = Path(args.output_root) / f"L{L}" / "runs"
     cfg_dir = Path(args.output_root) / f"L{L}" / "configs"
     run_dir.mkdir(parents=True, exist_ok=True)
+    lock_handle = (run_dir / ".run.lock").open("a+")
+    fcntl.flock(lock_handle, fcntl.LOCK_EX)
+    register_run(run_dir, params, seeds, args.steps, sample_interval=args.sample_interval,
+                 stop_mean_size=args.stop_mean_size, init_config=args.init_config)
+    complete = True
+    for seed in seeds:
+        path = run_dir / f"seed_{seed}.csv"
+        if not path.exists():
+            complete = False
+            break
+        last = np.genfromtxt(path, delimiter=",", names=True, ndmin=1)[-1]
+        if not (last["step"] == args.steps or last["n_active"] == 0 or
+                (args.stop_mean_size > 0 and last["mean_size"] >= args.stop_mean_size)):
+            complete = False
+            break
+    if complete:
+        print(f"L={L}: all {len(seeds)} runs already complete; reusing checked trajectories", flush=True)
+        return
     cfg_dir.mkdir(parents=True, exist_ok=True)
     max_comp = (L // 2 + 1) ** 2
     print(f"L={L} seeds={seeds} params={params} steps={args.steps} stop_mean_size={args.stop_mean_size} "
@@ -106,7 +127,7 @@ def main():
                 patterns[b].update(((ids[:, 0] << np.uint64(32)) | ids[:, 1]).tolist())
                 rows[b].append((t, m["max_fitness"][b], m["mean_fitness"][b], m["max_size"][b], m["mean_size"][b],
                                 len(types_seen[b]), len(patterns[b]), m["n_active"][b], n))
-                if m["mean_size"][b] >= args.stop_mean_size or m["n_active"][b] == 0 or t == args.steps:
+                if (args.stop_mean_size > 0 and m["mean_size"][b] >= args.stop_mean_size) or m["n_active"][b] == 0 or t == args.steps:
                     stop[b] = True
             if stop.any():
                 cfgs = np.asarray(states.config)
@@ -114,7 +135,7 @@ def main():
                     save(run_dir / f"seed_{seeds[b]}.csv", rows[b])
                     np.save(cfg_dir / f"seed_{seeds[b]}_step{t}.npy", cfgs[b].astype(np.int16))
                     (run_dir / f"seed_{seeds[b]}.partial.csv").unlink(missing_ok=True)
-                    why = "runaway" if rows[b][-1][4] >= args.stop_mean_size else "extinct" if rows[b][-1][7] == 0 else "end"
+                    why = "runaway" if args.stop_mean_size > 0 and rows[b][-1][4] >= args.stop_mean_size else "extinct" if rows[b][-1][7] == 0 else "end"
                     print(f"[L={L} seed={seeds[b]}] stop at step {t} ({why}; mean_size={rows[b][-1][4]:.1f}, "
                           f"max_size={int(rows[b][-1][3])}) after {time.time() - t0:.0f}s", flush=True)
                 active &= ~stop

@@ -92,28 +92,9 @@ def novelty_rate():
 def matched_seed_checks():
     d = pd.read_csv(ROOT / "results/npj_rev/ext1/per_run.csv")
     d = d[d.rule == "intended"].copy()
-    original = d[(d.D == 100) & (d.P == 0)].set_index("seed")
-    best = d[(d.D == 100) & (d.P == 1)].set_index("seed")
-    rng = np.random.default_rng(20261023)
     records = []
-    orig_used = original.used.to_numpy(bool)
-    best_used = best.loc[original.index].used.to_numpy(bool)
-    gains, losses = int((~orig_used & best_used).sum()), int((orig_used & ~best_used).sum())
-    p = stats.binomtest(gains, gains + losses).pvalue if gains + losses else 1.0
-    records.append(dict(comparison="(100,1) minus (100,0)", measure="success", n=30,
-                        mean_difference=float((best_used.astype(int) - orig_used).mean()),
-                        ci_lo=np.nan, ci_hi=np.nan, p=p,
-                        test="exact paired McNemar (discordant seeds)", gains=gains, losses=losses))
-    for col in ("B_run", "C_run"):
-        mask = original.used & best.used
-        diff = best.loc[mask, col].to_numpy() - original.loc[mask, col].to_numpy()
-        boots = diff[rng.integers(0, len(diff), (10000, len(diff)))].mean(axis=1)
-        lo, hi = np.percentile(boots, [2.5, 97.5])
-        records.append(dict(comparison="(100,1) minus (100,0)", measure=col, n=len(diff),
-                            mean_difference=diff.mean(), ci_lo=lo, ci_hi=hi,
-                            p=stats.wilcoxon(diff).pvalue, test="paired Wilcoxon; jointly successful seeds",
-                            gains=np.nan, losses=np.nan))
-    for col in ("B_run", "C_run"):
+    for index, col in enumerate(("B_run", "C_run")):
+        rng = np.random.default_rng(20261103 + index)
         ok = d[d.used]
         a = ok[ok.P == 0][["D", "seed", col]]
         b = ok[ok.P == 1][["D", "seed", col]]
@@ -125,7 +106,7 @@ def matched_seed_checks():
         records.append(dict(comparison="P=1 minus P=0, matched D and seed; averaged within seed",
                             measure=col, n=len(diff), mean_difference=diff.mean(), ci_lo=lo, ci_hi=hi,
                             p=stats.wilcoxon(diff).pvalue, test="paired Wilcoxon across seed blocks",
-                            gains=np.nan, losses=np.nan))
+                            bootstrap_seed=20261103 + index))
     out = pd.DataFrame(records)
     out.to_csv(OUT / "matched_seed_checks.csv", index=False)
     return out
@@ -149,8 +130,8 @@ def main():
               "## Matched-seed sensitivity checks", "", paired.to_string(index=False), "",
               "These exploratory contrasts preserve seed dependence across conditions. B/C comparisons "
               "are conditional on success in both matched conditions. Their intervals resample seeds, "
-              "not individual contests or time points. They do not convert the product ranking into a "
-              "pre-registered optimum or establish equivalence of implementations."]
+              "not individual contests or time points. Each observable has its own fixed bootstrap seed. "
+              "These checks address the effect of dyadicity, not equivalence of implementations."]
     (OUT / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
