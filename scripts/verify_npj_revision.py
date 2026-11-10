@@ -19,8 +19,10 @@ REMOVED_COMPOSITES = {"ABC", "ABC_lo", "ABC_hi", "ABC_rel", "rank_ABC",
 
 
 def separate_observables(text):
-    assert not re.search(r"overall[- ]performance|largest[- ]product|rank_ABC", text, re.I), \
+    assert not re.search(r"overall[- ]performance|largest[- ]product|rank_ABC|combined measure", text, re.I), \
         "removed aggregate claim is present"
+    # Fig. 5 has panels a-c only since the aggregate panel was removed.
+    assert not re.search(r"\\ref\{fig:P-D-final\}~?\(?d", text), "reference to the removed Fig. 5d"
     compact = re.sub(r"[\s${}]", "", text)
     assert "A\\timesB\\timesC" not in compact and "A*B*C" not in compact, \
         "removed aggregate formula is present"
