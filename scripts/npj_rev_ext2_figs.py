@@ -158,9 +158,9 @@ def tex_int(v) -> str:
 # ---------------- marker groups (L=100 reference, Delta L=20 grid, onset scan) ----------------
 C_REF = PAL[0]
 GROUPS = {   # group -> (colour, marker, marker size in points, legend label)
-    "grid": (C_MAIN, "o", 3.6, r"$\Delta L{=}20$ grid"),
+    "grid": (C_MAIN, "o", 3.6, "Coarse scan"),
     "onset": (C_ADD, "D", 3.2, "Onset scan"),
-    "ref": (C_REF, "^", 3.9, r"$L{=}100$ (SCHC)"),
+    "ref": (C_REF, "^", 3.9, r"$L{=}100$"),
 }
 
 
@@ -717,7 +717,7 @@ def figure_phenomenon(a, runs, tab, legacy_tab, win, novelty, out_dir: Path) -> 
         lt = legacy_tab.sort_values("L")
         axd.fill_between(lt["L"], lt["runaway_lo"], lt["runaway_hi"], color=C_LEG, alpha=0.18, lw=0)
         axd.plot(lt["L"], lt["runaway_frac"], "s-", color=C_LEG, ms=2.6, lw=1.0, mec="white", mew=0.3,
-                 label="Published model", zorder=2)
+                 label="Earlier variant", zorder=2)
     t = tab[tab["n_used"] > 0].sort_values("L")
     if len(t):
         axd.fill_between(t["L"], t["runaway_lo"], t["runaway_hi"], color=C_MAIN, alpha=0.16, lw=0)
@@ -754,18 +754,19 @@ def figure_phenomenon(a, runs, tab, legacy_tab, win, novelty, out_dir: Path) -> 
         st = novelty["step"].to_numpy()
         ax_p.fill_between(st, novelty["pat_q25"] / 1e3, novelty["pat_q75"] / 1e3, color=C_PAT, alpha=0.18, lw=0)
         ax_p.plot(st, novelty["pat_median"] / 1e3, color=C_PAT, lw=1.5)
-        ax_p.set_ylabel("Cum. pattern\ntypes ($10^3$)", fontsize=7.5)
-        ax_p.set_ylim(0, None)
+        # the quantities are named inside the panels: two-line axis labels do not fit the panel height
+        ax_p.text(0.03, 0.95, "Observed component-pattern\ntypes ($\\times10^3$)", transform=ax_p.transAxes,
+                  fontsize=6.5, va="top")
+        ax_p.set_ylim(0, float(novelty["pat_q75"].max()) / 1e3 * 1.45)
         plt.setp(ax_p.get_xticklabels(), visible=False)
         ax_s.fill_between(st, novelty["size_q25"], novelty["size_q75"], color=C_MAIN, alpha=0.18, lw=0)
         ax_s.plot(st, novelty["size_median"], color=C_MAIN, lw=1.5)
-        ax_s.set_ylabel("Mean size", fontsize=7.5)
-        ax_s.set_ylim(0, max(6.0, float(novelty["size_q75"].max()) * 1.25))
+        ax_s.text(0.03, 0.95, "Mean component size", transform=ax_s.transAxes, fontsize=6.5, va="top")
+        ax_s.set_ylim(0, max(7.0, float(novelty["size_q75"].max()) * 1.5))
         ax_s.set_xlabel("Time (steps)")
         ax_s.xaxis.set_major_formatter(KFMT)
         ax_p.set_title(f"$L=200$, median and IQR of {int(novelty['n'].iloc[0])} runs", fontsize=7)
         sns.despine(ax=ax_p); sns.despine(ax=ax_s)
-        ax_p.yaxis.set_label_coords(-0.2, 0.5); ax_s.yaxis.set_label_coords(-0.2, 0.5)
         status["(e)"] = "rendered"
     plabel(ax_p, "(e)", dx=-0.24)
 
@@ -880,7 +881,7 @@ def figure_mechanism(a, runs, tab, corr, corr_src, win, sens, out_dir: Path) -> 
         axb.plot(c["L"][~prov], c["r"][~prov], "o", color=C_MAIN, ms=3.6, mec="white", mew=0.4, zorder=4)
         axb.plot(c["L"][prov], c["r"][prov], "o", mfc="white", mec=C_MAIN, ms=3.6, mew=0.9, zorder=4)
         h = [Line2D([], [], color=C_MAIN, lw=1.3, marker="o", ms=3.6, mec="white", mew=0.4,
-                    label=r"$r$ of ensemble means")]
+                    label=r"Ensemble $r$")]
         if a.r_per_run and c["r_run"].notna().any():
             axb.errorbar(c["L"] + 2, (c["r_run_lo"] + c["r_run_hi"]) / 2, yerr=(c["r_run_hi"] - c["r_run_lo"]) / 2,
                          fmt="none", ecolor=C_ADD, elinewidth=0.9, capsize=1.5, alpha=0.9, zorder=3)
@@ -904,7 +905,7 @@ def figure_mechanism(a, runs, tab, corr, corr_src, win, sens, out_dir: Path) -> 
     else:
         pending(axb, "size-score correlation")
         status["(b)"] = "pending"
-    axb.set_xlabel("Space size $L$"); axb.set_ylabel(r"Corr($\bar s,\bar q$), $t=2$k$-10$k")
+    axb.set_xlabel("Space size $L$"); axb.set_ylabel("$r(\\bar s,\\bar q)$, steps 2,000\u201310,000")
     sns.despine(ax=axb); plabel(axb, "(b)")
 
     # (c,d) phase diagrams ---------------------------------------------------------------
@@ -914,12 +915,12 @@ def figure_mechanism(a, runs, tab, corr, corr_src, win, sens, out_dir: Path) -> 
     nc = nd = 0
     has = lambda k: sens is not None and len(sens) and bool(((sens["param"] == k) & (sens["n"] > 0)).any())
     if has("mu"):
-        nc = draw_phase(axc, sens, "mu", SENS_MU, Ls, r"Runaway vs $(L,\mu)$", r"Mutation rate $\mu$")
+        nc = draw_phase(axc, sens, "mu", SENS_MU, Ls, r"Runaway vs $(L,\mu)$", r"Mutation probability $\mu$")
     else:
         pending(axc, r"$(L,\mu)$ sensitivity runs", short(a.sens_root))
     if has("p_death"):
         nd = draw_phase(axd, sens, "p_death", SENS_PD, Ls, r"Runaway vs $(L,p_{\mathrm{death}})$",
-                        r"Death prob. $p_{\mathrm{death}}$")
+                        r"Death probability $p_{\mathrm{death}}$")
     else:
         pending(axd, r"$(L,p_{\mathrm{death}})$ sensitivity runs", short(a.sens_root))
     if nc + nd:      # one colour bar for both diagrams, whichever of them has data
@@ -983,7 +984,8 @@ def figure_mechanism(a, runs, tab, corr, corr_src, win, sens, out_dir: Path) -> 
             axe.plot([T_END + 380, T_END + 1150], [y, y], color=col, lw=1.6, ls=ls, clip_on=False,
                      solid_capstyle="butt")
             axe.text(T_END + 1300, y, lab, color=col, fontsize=6.6, va="center", ha="left", clip_on=False)
-        axe.text(0.012, 0.97, "Nucleation kinetics", transform=axe.transAxes, fontsize=7.5, va="top")
+        axe.text(0.012, 0.97, "Nucleation kinetics (nucleated: mean component size > 100)", transform=axe.transAxes,
+                 fontsize=7.5, va="top")
         status["(e)"] = "rendered (L=" + ",".join(map(str, Lnuc)) + ")"
     else:
         pending(axe, "nucleation kinetics")
@@ -993,7 +995,7 @@ def figure_mechanism(a, runs, tab, corr, corr_src, win, sens, out_dir: Path) -> 
         notes.append("(e) L=" + ", ".join(map(str, missing)) + " not yet available.")
     axe.set_xlim(0, T_END)
     axe.xaxis.set_major_formatter(KFMT)
-    axe.set_xlabel("Time (steps)"); axe.set_ylabel("Fraction nucleated\n(mean size > 100)")
+    axe.set_xlabel("Time (steps)"); axe.set_ylabel("Fraction nucleated")
     sns.despine(ax=axe); plabel(axe, "(e)", dx=-0.075)
 
     pn = partial_note(tab[tab["L"].isin(set(Lnuc) | set(runs.loc[runs["runaway"], "L"]))], "(a,e)")

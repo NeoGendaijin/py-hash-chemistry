@@ -13,12 +13,16 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results/npj_rev/supplement"
+
+
+KFMT = FuncFormatter(lambda x, _: f"{x / 1000:g}k" if x else "0")
 
 
 def save(fig, name):
@@ -29,8 +33,8 @@ def save(fig, name):
 
 def spatial_observables():
     fig, axs = plt.subplots(1, 3, figsize=(10.4, 3.2), layout="constrained")
-    metrics = [("occupancy", "Active cells / grid area"),
-               ("dominant_share", "Largest component / active cells"),
+    metrics = [("occupancy", r"Occupancy $N_{\mathrm{active}}/L^2$"),
+               ("dominant_share", r"Largest-component share $s_{\max}/N_{\mathrm{active}}$"),
                ("n_components", "Number of components")]
     colors = {200: "#0072B2", 240: "#D55E00", 400: "#009E73"}
     grid = np.arange(0, 20001, 10)
@@ -52,16 +56,17 @@ def spatial_observables():
         for runaway, members in groups.items():
             arr = np.stack(members)
             low, med, high = np.percentile(arr, [25, 50, 75], axis=0)
-            label = f"L={L}, {'runaway' if runaway else 'compact/extinct'} (n={len(arr)})"
+            label = f"$L$ = {L}, {'runaway' if runaway else 'compact or extinct'} ($n$ = {len(arr)})"
             style = "-" if runaway else "--"
             for k, ax in enumerate(axs):
                 ax.plot(grid, med[:, k], color=colors[L], ls=style, lw=1.2, label=label)
                 ax.fill_between(grid, low[:, k], high[:, k], color=colors[L], alpha=0.07)
     for k, (ax, (_, label)) in enumerate(zip(axs, metrics)):
-        ax.set(xlabel="Step", ylabel=label, title=f"({chr(97+k)})")
-        ax.ticklabel_format(axis="x", style="sci", scilimits=(4, 4))
+        ax.set(xlabel="Time (steps)", ylabel=label, title=f"({chr(97+k)})")
+        ax.xaxis.set_major_formatter(KFMT)
         ax.spines[["top", "right"]].set_visible(False)
-    axs[2].legend(fontsize=6.2, frameon=False)
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=3, fontsize=7, frameon=False)
     save(fig, "spatial_observables")
     out = pd.DataFrame(rows)
     out.to_csv(OUT / "spatial_observables.csv", index=False)
@@ -82,7 +87,8 @@ def novelty_rate():
     fig, ax = plt.subplots(figsize=(5.4, 2.8), layout="constrained")
     ax.plot(q.index, q[0.5], color="#0072B2", lw=1.4)
     ax.fill_between(q.index, q[0.25], q[0.75], color="#0072B2", alpha=0.18)
-    ax.set(xlabel="End of 1,000-step window", ylabel="New sampled pattern types per step")
+    ax.set(xlabel="Time (steps), end of 1,000-step window", ylabel="New component-pattern\ntypes per step")
+    ax.xaxis.set_major_formatter(KFMT)
     ax.set_ylim(bottom=0)
     ax.spines[["top", "right"]].set_visible(False)
     save(fig, "novelty_rate")

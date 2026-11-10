@@ -454,8 +454,8 @@ def fmt_val(v, kind):
 
 HEAT_SPECS = [  # key, file name, colourbar label, title
     ("A", "P-D-final-num-runs", "Successful runs (of 30)", "(a) Successful runs A"),
-    ("B", "P-D-final-size", "Mean active cells per\nreplication event", "(b) Replication-event size B, t = 1500-2000"),
-    ("C", "P-D-final-nctypes", "Cumulative pattern\ntypes (x10$^3$)", "(c) Pattern types C, t = 2000 (end of run)"),
+    ("B", "P-D-final-size", "Mean active cells per\nreplication event", "(b) Replication-event size B, steps 1,501–2,000"),
+    ("C", "P-D-final-nctypes", "Cumulative replicated\npattern types (×10$^3$)", "(c) Replicated pattern types C, $t$ = 2,000"),
 ]
 
 
@@ -512,8 +512,7 @@ def fig5(tab, out):
         heat_panel(fig, ax, fig.add_subplot(panel[0, 1]), t, key, label, title)
         if key == "B":
             ax.set_ylabel("")  # Shared P rows; avoid the adjacent panel's colorbar label.
-    fig.text(0.5, 0.0, "Box: original setting (D, P) = (L, 0) (top-right cell). "
-             "B: final 500 steps; C: after all 2000 steps.",
+    fig.text(0.5, 0.0, "Box: original setting (D, P) = (L, 0).",
              ha="center", fontsize=6.5, color="#444444")
     savefig(fig, out, "fig5_heatmaps")
     for key, fname, label, title in HEAT_SPECS:  # single panels, drop-in file names
@@ -526,16 +525,16 @@ def fig5(tab, out):
 
 def label_set():
     """Label the original setting and the Fig. 7 conditions, without a composite ranking."""
-    keys = {ORIGINAL: "original (L, 0)"}
+    keys = {ORIGINAL: "(100, 0) original"}
     for D, P, _ in SNAP_CONDS:
-        keys.setdefault((D, P), f"({D}, {P:.1f})")
+        keys.setdefault((D, P), f"({D}, {P:g})")
     return keys
 
 
 # label offsets (points) per panel of the 2-D version: (A,B), (A,C), (B,C); default (4, 3)
 PAIR_OFFSETS = [
-    {ORIGINAL: (5, -2), (10, 0.0): (-48, 4), (20, 0.2): (-50, -4), (100, 1.0): (-62, -16)},
-    {ORIGINAL: (-10, 7), (10, 0.0): (-48, -10), (20, 0.2): (-52, 6), (100, 1.0): (-66, -20)},
+    {ORIGINAL: (5, -2), (10, 0.0): (-20, 7), (20, 0.2): (-50, -4), (100, 1.0): (-62, -16)},
+    {ORIGINAL: (-2, 8), (10, 0.0): (-26, -16), (20, 0.2): (-46, 16), (100, 1.0): (-66, -20)},
     {ORIGINAL: (6, -12), (10, 0.0): (-6, -14), (20, 0.2): (-12, 18), (100, 1.0): (6, -3)},
 ]
 
@@ -563,7 +562,7 @@ def fig6(tab, out):
     # points away from the label anchors
     ax.set_xlabel("A: successful runs (of 30)", fontsize=7, labelpad=2)
     ax.set_ylabel("B: replication-event size", fontsize=7, labelpad=2)
-    ax.set_zlabel("C: pattern types (x10$^3$)", fontsize=7, labelpad=2)
+    ax.set_zlabel("C: replicated pattern types (×10$^3$)", fontsize=7, labelpad=2)
     ax.set_zlim(z0, None)
     ax.tick_params(labelsize=6, pad=0)
     for a in (ax.xaxis, ax.yaxis, ax.zaxis):
@@ -590,12 +589,12 @@ def fig6(tab, out):
     savefig(fig, out, "fig6_3d")
     # ---- 2-D pair panels
     fig = plt.figure(figsize=(DOUBLE_COL, 62 * MM))
-    gs = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 0.04], wspace=0.42, left=0.07, right=0.93, bottom=0.18,
+    gs = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 0.04], wspace=0.62, left=0.07, right=0.93, bottom=0.18,
                           top=0.95)
     axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
     pairs = [("A", "B", "A: successful runs (of 30)", "B: replication-event size"),
-             ("A", "C", "A: successful runs (of 30)", "C: pattern types (x10$^3$)"),
-             ("B", "C", "B: replication-event size", "C: pattern types (x10$^3$)")]
+             ("A", "C", "A: successful runs (of 30)", "C: replicated pattern\ntypes (×10$^3$)"),
+             ("B", "C", "B: replication-event size", "C: replicated pattern\ntypes (×10$^3$)")]
     jit = np.random.default_rng(1).uniform(-A_JITTER, A_JITTER, len(t))
     for ax, (xk, yk, xl, yl), offs in zip(axes, pairs, PAIR_OFFSETS):
         xv = t[xk].to_numpy(float) + (jit if xk == "A" else 0)
@@ -623,7 +622,7 @@ def fig6(tab, out):
     cb.set_label("Dyadic interaction probability $P$", fontsize=7)
     cb.set_ticks(P_VALUES)
     cb.ax.tick_params(labelsize=6.5)
-    fig.text(0.5, -0.02, f"A is an integer count; points are jittered horizontally by up to +/-{A_JITTER} so that "
+    fig.text(0.5, -0.02, f"A is an integer count; points are jittered horizontally by up to ±{A_JITTER} so that "
              "conditions with equal A do not overlap.", ha="center", fontsize=6.5, color="#444444")
     savefig(fig, out, "fig6_pairs")
 
@@ -631,7 +630,7 @@ def fig6(tab, out):
 def fig_trends(tab, boots, out):
     t = tab[tab.rule == "intended"]
     meas = [("A", "A: successful runs (of 30)"), ("B", "B: replication-event size"),
-            ("C", "C: pattern types (x10$^3$)")]
+            ("C", "C: replicated pattern types (×10$^3$)")]
     fig, axes = plt.subplots(2, 3, figsize=(DOUBLE_COL, 110 * MM), gridspec_kw=dict(wspace=0.38, hspace=0.5))
     for row, (by, other, vals, ovals, pal) in enumerate([("P", "D", P_VALUES, D_VALUES, "flare"),
                                                          ("D", "P", D_VALUES, P_VALUES, "crest")]):
